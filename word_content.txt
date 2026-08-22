@@ -1,0 +1,56 @@
+GREATER NOIDA INSTITUTE OF TECHNOLOGY ( ENGINEERING INSTITUTE )     
+DEPARTMENT OF C.S.E.(AI & ML) 3rd Year  
+                             BuildMetrics-AI Project Team              1. Shambhu Shekhar Sinha  (2401321530048)                 2. Vaibhav Kumar Tiwari  (2401321530062)          3. Rishu Raj  (2402321530040)                                                                                                                                                            
+                                                                                                   
+BuildMetrics-AI: Comprehensive Literature Review & Technical Benchmarking
+
+Research Paper & Authors	Year	Problem Addressed & AI Methodology	System I/O & Data Flow	3D Blueprinting & Cost Estimation	Dataset & Platform	Project Relevance & Role	
+AI-Driven House Plan Generator
+
+Authors: Judin Johnson, Gouri K P, Aiswarya A K, Anandhanarayanan A N, N. N	2025	Automates 2D floor plan generation from natural-language descriptions to eliminate drafting delays. Employs T5 and LLaMA for parsing spatial requirements, GNNs for topological room adjacency, and GANs for vector layout image generation.	Input: Textual descriptions of room types, dimensions, constraints, and uploaded CAD files.
+Output: Vectorized 2D floor plans, downloadable image layouts, and visual cost charts.	3D Support: No 3D model generation.
+Quantity & Costing: Automatically computes structural takeoff including steel tonnage, RCC belt dimensions, rubble masonry, and basic fittings.	1,500 AutoCAD architectural drawings (preprocessed to 512×512) built as a Streamlit web app.	Key Strength: Natural-language to 2D layout generation with early budgeting.
+Limitation: Restricted to 2D planning without interactive 3D spatial modeling.
+Project Role: Base NLP parsing and initial layout generation module.	
+Integrating Computer Vision in Construction Estimations and 3D Modelings
+
+Authors: Mamoona Rasheed, Hamza Munsif, S. Mehboob	2024	Converts scanned legacy 2D blueprints into parametric 3D models while extracting material quantities. Utilizes an OpenCV vision pipeline for wall/line detection combined with automated Python-Blender API scripts for extruded mesh synthesis.	Input: Scanned 2D raster floor plans (PNG/JPEG/PDF) and measured blueprints.
+Output: Parametric 3D building models, extracted wall/opening schedules, and Bill of Materials.	3D Support: Explicit automatic 3D generation via Blender.
+Quantity & Costing: Calculates masonry requirements including cement bags, structural steel, brick counts, and tile coverage.	Custom Python computer vision and Blender modeling pipeline designed for architects and general contractors.	Key Strength: Converts legacy raster blueprints directly into 3D geometry.
+Limitation: Sensitive to input image resolution; lacks foundation/sub-structure takeoff.
+Project Role: 2D-to-3D model reconstruction engine.	
+Smart House Planner: An AI-Powered System for Interactive Home Design, 3D Modelling, and Cost Estimation
+
+Authors: Dr. K. Jagadeesh	2025	Unifies interactive layout design, real-time 3D visualization, and dynamic cost forecasting into a single web portal. Employs Gemini AI for spatial recommendations, Blender/Three.js for 3D rendering, and a real-time estimation engine in Django.	Input: Plot boundaries, room preferences, design styles, and budget constraints.
+Output: Optimized floor plans, interactive WebGL 3D models, and downloadable PDF budget reports.	3D Support: Fully interactive 3D virtual exploration.
+Quantity & Costing: Computes structural material volumes alongside prevailing localized labor rates and equipment rental costs in real time.	Full-stack Django web platform integrated with Google Gemini API and WebGL rendering.	Key Strength: Complete end-to-end user-facing prototype linking design to live budget.
+Limitation: Lacks standardized empirical accuracy benchmark validation.
+Project Role: Core system benchmark and web interface architecture.	
+Home Builder AI for Intelligent Construction Planning with Cost Estimates, Weather Forecasting and Quality Analysis
+
+Authors: M. Venu	2025	Addresses project execution delays, cost overruns, and structural quality control. Uses machine learning regression for expense forecasting, meteorological APIs for weather-informed scheduling, and computer vision for site defect detection.	Input: Site boundary parameters, execution timeline, location, and regional data.
+Output: Predictive cost-risk models, weather-adjusted project schedules, and quality audit logs.	3D Support: No 3D model generation.
+Quantity & Costing: Predicts aggregate expenses across raw materials, on-site labor force, and heavy machinery/equipment operations.	Cloud-based project management and risk optimization platform for builders and project managers.	Key Strength: Robust post-design scheduling, weather delay forecasting, and risk analysis.
+Limitation: Lacks automated architectural blueprint generation capabilities.
+Project Role: Post-design scheduling and risk management module.	
+From Floor Plans to Cost Estimates: A Deep Learning Approach for Room Segmentation and Material Quantification
+
+Authors: Ketan Kanjiya, Piyush Sonani, U. Zala	2026	Automates semantic interpretation of floor plan images to produce exact room-level material takeoffs. Implements a Transformer U-Net architecture for semantic segmentation and geometric polygon feature extraction.	Input: Raster floor plan images and architectural CAD renders.
+Output: Segmented room masks, linear wall lengths, calculated surface areas, and room-wise material schedules.	3D Support: No 3D model generation.
+Quantity & Costing: Generates fine-grained room estimates for floor tiles, wall paint volume, lighting fixtures, and structural concrete.	Deep-learning image segmentation pipeline for automated architectural quantity surveying.	Key Strength: High-precision room-level semantic segmentation and material takeoff.
+Limitation: Analytical takeoff tool only; does not provide generative layout drafting.
+Project Role: Deep learning quantity takeoff and BOQ calculation engine.	
+BUILDWISE: An AI-Based Smart Construction Cost Estimation System
+
+Authors: S. K. Verma, R. N. Sharma, A. P. Patel	2026	Tackles inaccuracies in traditional cost estimation caused by volatile material prices and regional wage differences. Implements ensemble ML regression (Random Forest & Gradient Boosting) integrated with live online vendor price scrapers.	Input: Built-up square area, geographic location/tier, structural floors, and material grade.
+Output: Instant dynamic cost breakdowns, material quantity lists, and interactive cost variance charts.	3D Support: No 3D model generation.
+Quantity & Costing: Predicts concrete, brickwork, reinforcement steel, labor wages, and equipment expenses with live market rate adjustment.	Python web framework (Flask/Django) using Scikit-Learn and Pandas with historical construction indices.	Key Strength: Dynamic real-time market pricing integration for accurate budgeting.
+Limitation: Does not generate architectural floor plans or 3D visual models.
+Project Role: Dynamic pricing regression and market fluctuation calibration module.	
+AI-Augmented Construction Cost Estimation: NLP Model for Quantity Take-Off Alignment
+
+Authors: Peyman Jafary, Davood Shojaei, Abbas Rajabifard, Tuan Ngo	2025	Eliminates manual discrepancies between extracted quantities and localized standard cost indexes. Uses ensemble Natural Language Processing (NLP) to semantically align free-text work descriptions directly with building cost master formats.	Input: BIM model schedules, 2D drawing takeoffs, and regional cost index databases.
+Output: Aligned cost codes, verified line-item estimates, and discrepancy risk notifications.	3D Support: Compatible with 3D BIM (Revit/IFC) quantity extractions.
+Quantity & Costing: Automatically matches work items (excavation, formwork, reinforcement) to standard unit-rate databases.	Tested on residential high-rise construction datasets achieving 82.96% agreement rate with expert Quantity Surveyors.	Key Strength: Automated semantic matching of work items to cost databases with minimal error (-2.05% deviation).
+Limitation: Requires standardized input descriptions or pre-extracted quantities.
+Project Role: Cost-index matching and automated Bill of Quantities (BOQ) standardizer.	
