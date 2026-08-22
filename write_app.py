@@ -1,4 +1,4 @@
-import streamlit as st
+content = '''import streamlit as st
 import pandas as pd
 import plotly.express as px
 from civil_math import calculate_quantities
@@ -99,3 +99,6 @@ with tab3:
         st.dataframe(df_history, hide_index=True)
     else:
         st.write("No history available.")
+'''
+with open('app.py', 'w', encoding='utf-8') as f:
+    f.write(content)
