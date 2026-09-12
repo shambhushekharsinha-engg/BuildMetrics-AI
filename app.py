@@ -27,7 +27,7 @@ st.set_page_config(
 )
 
 import db
-db.init_db()
+db.init_db()  # Replaced with Alembic auto-upgrade
 
 if 'user_id' not in st.session_state:
     st.session_state.user_id = None
@@ -84,12 +84,12 @@ with st.sidebar.expander("👤 User Authentication", expanded=not st.session_sta
         pwd = st.text_input("Password", type="password")
         if st.button(auth_mode):
             if auth_mode == "Sign Up":
-                if db.create_user(uname, pwd):
+                if db.repo.create_user(uname, pwd):
                     st.success("Account created! Please login.")
                 else:
                     st.error("Username already exists.")
             else:
-                uid, msg = db.verify_user(uname, pwd)
+                uid, msg = db.repo.verify_user(uname, pwd)
                 if uid:
                     st.session_state.user_id = uid
                     st.session_state.username = uname
@@ -107,7 +107,7 @@ if st.session_state.user_id:
         proj_name = st.text_input("Project Name")
         if st.button("💾 Save Current Project"):
             if proj_name:
-                db.save_project(
+                db.repo.save_project(
                     st.session_state.user_id, proj_name,
                     st.session_state.get('plot_length', 20.0),
                     st.session_state.get('plot_width', 15.0),
@@ -118,7 +118,7 @@ if st.session_state.user_id:
             else:
                 st.warning("Enter a project name.")
         
-        saved_projs = db.load_user_projects(st.session_state.user_id)
+        saved_projs = db.repo.load_user_projects(st.session_state.user_id)
         if saved_projs:
             sel_proj = st.selectbox("Load Project", ["Select..."] + [p["name"] for p in saved_projs])
             if sel_proj != "Select...":
