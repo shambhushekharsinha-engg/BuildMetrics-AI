@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: buildmetrics
+      POSTGRES_PASSWORD: supersecret
+      POSTGRES_DB: buildmetrics
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U buildmetrics"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      target: builder
+    image: buildmetrics-api:latest
+    restart: always
+    env_file:
+      - .env
+    environment:
+      # Automatically run alembic upgrades on start
+      - DATABASE_URL=postgresql://buildmetrics:supersecret@db:5432/buildmetrics
+    ports:
+      - "8000:8000"
+    command: >
+      sh -c "alembic upgrade head && uvicorn api:app --host 0.0.0.0 --port 8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    # IMPORTANT: Do not scale replicas > 1 currently, as MODEL_STORE is an in-memory dict
+    # that relies on sticky sessions/single instances.
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/docs"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  app:
+    build:
+      context: .
+      target: builder
+    image: buildmetrics-app:latest
+    restart: always
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://buildmetrics:supersecret@db:5432/buildmetrics
+      - API_BASE_URL=http://api:8000
+    ports:
+      - "8501:8501"
+    command: ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  pgdata:
