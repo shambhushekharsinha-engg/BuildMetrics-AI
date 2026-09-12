@@ -15,7 +15,7 @@ COPY requirements.txt .
 RUN pip wheel --no-cache-dir --no-deps --wheel-dir /app/wheels -r requirements.txt
 
 # Stage 2: Runner
-FROM python:3.12-slim
+FROM python:3.12-slim as runner
 
 WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1

@@ -21,7 +21,7 @@ services:
   api:
     build:
       context: .
-      target: builder
+      target: runner
     image: buildmetrics-api:latest
     restart: always
     env_file:
@@ -47,7 +47,7 @@ services:
   app:
     build:
       context: .
-      target: builder
+      target: runner
     image: buildmetrics-app:latest
     restart: always
     env_file:
