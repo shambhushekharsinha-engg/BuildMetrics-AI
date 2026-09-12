@@ -3,3 +3,4 @@ __pycache__/
 *.db
 cost_model.pkl
 .env
+walkthrough.md
