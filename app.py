@@ -260,27 +260,35 @@ plot_dims = InputHandler.create_plot_dimensions(
 )
 
 # Generate Building Model using LayoutEngine
-with st.spinner("Generating building architecture via API..."):
-    try:
-        resp = requests.post(
-            f"{API_BASE_URL}/api/v1/generate",
-            json={
-                "prompt": prompt_parsed.get("raw_prompt", ""),
-                "plot_length": plot_dims.length,
-                "plot_width": plot_dims.width,
-                "max_height": plot_dims.max_height,
-                "num_floors": plot_dims.num_floors,
-                "style": selected_style.value
-            },
-            timeout=30
-        )
-        resp.raise_for_status()
-        data = resp.json()
-        st.session_state.building_id = data["building_id"]
-        building_model = TypeAdapter(BuildingModel).validate_python(data["model"])
-    except Exception as e:
-        st.error(f"Failed to generate building: {e}")
-        st.stop()
+current_inputs = {
+    "prompt": prompt_parsed.get("raw_prompt", ""),
+    "plot_length": plot_dims.length,
+    "plot_width": plot_dims.width,
+    "max_height": plot_dims.max_height,
+    "num_floors": plot_dims.num_floors,
+    "style": selected_style.value
+}
+
+inputs_changed = current_inputs != st.session_state.get("last_inputs")
+
+if inputs_changed or "building_id" not in st.session_state or "building_model_cache" not in st.session_state:
+    with st.spinner("Generating building architecture via API..."):
+        try:
+            resp = requests.post(
+                f"{API_BASE_URL}/api/v1/generate",
+                json=current_inputs,
+                timeout=30
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            st.session_state.building_id = data["building_id"]
+            st.session_state.building_model_cache = data["model"]
+            st.session_state.last_inputs = current_inputs
+        except Exception as e:
+            st.error(f"Failed to generate building: {e}")
+            st.stop()
+
+building_model = TypeAdapter(BuildingModel).validate_python(st.session_state.building_model_cache)
 
 # Top Key Metrics Summary
 total_built = sum(building_model.total_building_area(f) for f in range(1, plot_dims.num_floors + 1))

@@ -17,7 +17,14 @@ app = FastAPI(title="BUILD-MATRIX.ai API", version="1.0.0")
 
 # In-memory store for active building models
 # Real-world: Use Redis + proper serialization
+from datetime import datetime, timedelta
 MODEL_STORE = {}
+
+def _clean_model_store():
+    cutoff = datetime.now() - timedelta(minutes=30)
+    expired = [uid for uid, data in MODEL_STORE.items() if data['created_at'] < cutoff]
+    for uid in expired:
+        del MODEL_STORE[uid]
 
 @app.post("/api/v1/generate")
 def generate_building(req: GenerateRequest):
@@ -35,8 +42,9 @@ def generate_building(req: GenerateRequest):
         layout_engine = LayoutEngine(plot=plot_dims, style=style_enum)
         model = layout_engine.generate_building(prompt_parsed=prompt_parsed)
         
+        _clean_model_store()
         building_id = str(uuid.uuid4())
-        MODEL_STORE[building_id] = model
+        MODEL_STORE[building_id] = {"model": model, "created_at": datetime.now()}
         
         # We also return the serialized model so the Streamlit UI can render the metrics without querying again
         from pydantic import TypeAdapter
@@ -56,7 +64,7 @@ def render_2d(req: Render2DRequest):
     if req.building_id not in MODEL_STORE:
         raise HTTPException(status_code=404, detail="Building model not found. Please regenerate.")
     
-    model = MODEL_STORE[req.building_id]
+    model = MODEL_STORE[req.building_id]['model']
     
     config = Blueprint2DConfig(
         grid_spacing=req.grid_spacing,
@@ -93,7 +101,7 @@ def export_file(req: ExportRequest):
     if req.building_id not in MODEL_STORE:
         raise HTTPException(status_code=404, detail="Building model not found. Please regenerate.")
     
-    model = MODEL_STORE[req.building_id]
+    model = MODEL_STORE[req.building_id]['model']
     temp_dir = tempfile.mkdtemp()
     
     try:
@@ -133,7 +141,7 @@ from fastapi.responses import HTMLResponse
 def render_3d(req: Render3DRequest):
     if req.building_id not in MODEL_STORE:
         raise HTTPException(status_code=404, detail="Building model not found. Please regenerate.")
-    model = MODEL_STORE[req.building_id]
+    model = MODEL_STORE[req.building_id]['model']
     renderer_3d = Blueprint3DRenderer(model)
     html_code = renderer_3d.generate_threejs_html()
     return HTMLResponse(content=html_code)
