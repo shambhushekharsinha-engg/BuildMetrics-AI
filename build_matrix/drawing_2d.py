@@ -310,6 +310,23 @@ class Blueprint2DRenderer:
         if self.config.show_compass:
             self._draw_compass_rose(ax, plot.length + 2.0, plot.width + 1.5, theme)
 
+        # 12b. Draw Compliance Annotations
+        for ann in building.annotations:
+            if ann.category == "compliance_tag":
+                color = "#388E3C" if ann.style_props.get("color") == "green" else "#D32F2F"
+                ax.text(
+                    ann.x,
+                    ann.y,
+                    ann.text,
+                    color="white",
+                    ha="center",
+                    va="center",
+                    fontsize=ann.style_props.get("fontsize", 6),
+                    fontweight="bold",
+                    bbox=dict(boxstyle="round,pad=0.2", facecolor=color, edgecolor="none", alpha=0.9),
+                    zorder=25,
+                )
+
         # 13. Draw Architectural Title Block & Legend
         if self.config.show_title_block:
             self._draw_title_block(ax, building, floor, theme)

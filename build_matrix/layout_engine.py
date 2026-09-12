@@ -177,6 +177,9 @@ class LayoutEngine:
         # Calculate IS 456 / ACI 318 Structural Engineering Schedules & BOQ Cost Estimates
         EngineeringEngine.calculate_engineering_schedules(building)
 
+        # Validate architectural code compliance (defaulting to NBC India 2016)
+        EngineeringEngine.calculate_compliance(building)
+
         return building
 
     def _generate_boundary_walls(self) -> List[WallSpec]:

@@ -7,6 +7,33 @@ from dataclasses import dataclass, field
 from typing import List, Dict, Tuple, Optional
 from enum import Enum
 
+@dataclass
+class CodeProfile:
+    name: str
+    min_habitable_room_area_m2: float
+    min_room_width_m: float
+    min_egress_width_m: float
+    max_riser_mm: float
+    min_tread_mm: float
+
+NBC_INDIA_2016 = CodeProfile(
+    name="NBC India (2016)",
+    min_habitable_room_area_m2=9.5,
+    min_room_width_m=2.4,
+    min_egress_width_m=0.9,
+    max_riser_mm=190.0,
+    min_tread_mm=250.0
+)
+
+IBC_2021 = CodeProfile(
+    name="IBC (2021)",
+    min_habitable_room_area_m2=6.5,
+    min_room_width_m=2.13,
+    min_egress_width_m=0.81,
+    max_riser_mm=196.0,
+    min_tread_mm=254.0
+)
+
 
 class ArchitecturalStyle(Enum):
     MODERN = "Modern"

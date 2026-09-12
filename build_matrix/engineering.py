@@ -15,11 +15,88 @@ from .models import (
     BeamSpec,
     WallSpec,
     WindowSpec,
+    CodeProfile,
+    NBC_INDIA_2016,
+    Annotation,
 )
 
 
 class EngineeringEngine:
     """Computes structural engineering schedules and BOQ cost estimates for buildings of any scale."""
+
+    @classmethod
+    def calculate_compliance(cls, building: BuildingModel, profile: CodeProfile = NBC_INDIA_2016) -> None:
+        """Validates building geometry against a specific building code profile and generates advisory annotations."""
+        # Check Rooms
+        for room in building.rooms:
+            # We assume all rooms are checked, or we could filter by room_type
+            # The prompt mentioned "min habitable room area", but for simplicity let's check all main rooms.
+            # Only checking rooms that sound habitable to avoid warning about small bathrooms.
+            habitable_types = ['bedroom', 'living', 'kitchen', 'dining', 'study', 'office', 'room']
+            is_habitable = any(h in room.room_type.lower() for h in habitable_types) or any(h in room.name.lower() for h in habitable_types)
+            
+            if is_habitable:
+                if room.area < profile.min_habitable_room_area_m2:
+                    text = f"Area: {room.area:.1f} m² (below {profile.name} min {profile.min_habitable_room_area_m2} m²)"
+                    color = "red"
+                else:
+                    text = f"Area: {room.area:.1f} m² (meets {profile.name} min {profile.min_habitable_room_area_m2} m²)"
+                    color = "green"
+                
+                # Check width
+                min_dim = min(room.width, room.height)
+                if min_dim < profile.min_room_width_m:
+                    text += f"\nWidth: {min_dim:.1f}m (below min {profile.min_room_width_m}m)"
+                    color = "red"
+                
+                building.annotations.append(Annotation(
+                    text=text,
+                    x=room.x + room.width / 2,
+                    y=room.y + 0.5, # Slightly above bottom edge
+                    category='compliance_tag',
+                    style_props={'color': color, 'fontsize': 6}
+                ))
+
+        # Check Doors (Egress)
+        for door in building.doors:
+            if door.width < profile.min_egress_width_m:
+                text = f"Egress: {door.width:.2f}m (below {profile.name} min {profile.min_egress_width_m}m)"
+                color = "red"
+            else:
+                text = f"Egress: {door.width:.2f}m (meets {profile.name} min {profile.min_egress_width_m}m)"
+                color = "green"
+            
+            building.annotations.append(Annotation(
+                text=text,
+                x=door.x,
+                y=door.y - 0.5,
+                category='compliance_tag',
+                style_props={'color': color, 'fontsize': 6}
+            ))
+            
+        # Check Stairs
+        for stair in building.stairs:
+            # Riser = floor_height / num_steps
+            # Tread = length / (num_steps if straight else num_steps/2)
+            riser_mm = (building.plot.floor_height / stair.num_steps) * 1000
+            
+            effective_steps = stair.num_steps / 2 if stair.stair_type == 'u-shaped' else stair.stair_steps if hasattr(stair, 'stair_steps') else stair.num_steps
+            tread_mm = (stair.length / effective_steps) * 1000 if effective_steps > 0 else 0
+            
+            if riser_mm > profile.max_riser_mm or tread_mm < profile.min_tread_mm:
+                text = f"Stair: Riser {riser_mm:.1f}mm (max {profile.max_riser_mm}), Tread {tread_mm:.1f}mm (min {profile.min_tread_mm})"
+                color = "red"
+            else:
+                text = f"Stair: Riser {riser_mm:.1f}mm, Tread {tread_mm:.1f}mm (meets {profile.name})"
+                color = "green"
+                
+            building.annotations.append(Annotation(
+                text=text,
+                x=stair.x + stair.width / 2,
+                y=stair.y - 0.5,
+                category='compliance_tag',
+                style_props={'color': color, 'fontsize': 6}
+            ))
 
     @classmethod
     def calculate_engineering_schedules(cls, building: BuildingModel) -> None:
