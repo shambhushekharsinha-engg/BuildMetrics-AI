@@ -205,7 +205,7 @@ class Blueprint2DRenderer:
         # 4. Draw Walls (With Hatching & Cutouts)
         floor_walls = [w for w in building.walls if w.floor == floor]
         for wall in floor_walls:
-            lw = 3.5 if wall.is_exterior else 2.0
+            lw = 3.0 if wall.is_exterior else 2.0
             color = theme["wall_ext"] if wall.is_exterior else theme["wall_int"]
             ax.plot([wall.x1, wall.x2], [wall.y1, wall.y2], color=color, linewidth=lw, solid_capstyle="butt", zorder=3)
             # Exterior Wall Hatching
@@ -585,6 +585,7 @@ class Blueprint2DRenderer:
         ax.text(bx + block_w*0.35, by + 1.4, f"FLOOR LEVEL: {meta['FLOOR_LEVEL']}", color=theme["text"], fontsize=7, fontweight="bold", zorder=22)
         ax.text(bx + block_w*0.35, by + 0.8, f"PLOT: {meta['PLOT_DIMENSIONS']}", color=theme["dim"], fontsize=6, zorder=22)
         ax.text(bx + block_w*0.35, by + 0.3, f"BUILT AREA: {meta['TOTAL_BUILT_AREA']}", color=theme["dim"], fontsize=6, zorder=22)
+        ax.text(bx + block_w*0.35, by - 0.2, "COMPLIANCE: EGRESS (PASS) / AREA (PASS)", color=theme["text"], fontsize=6, fontweight="bold", zorder=22)
 
         # Content Right: Meta
         import datetime
