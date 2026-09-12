@@ -80,7 +80,7 @@ class EngineeringEngine:
             # Tread = length / (num_steps if straight else num_steps/2)
             riser_mm = (building.plot.floor_height / stair.num_steps) * 1000
             
-            effective_steps = stair.num_steps / 2 if stair.stair_type == 'u-shaped' else stair.stair_steps if hasattr(stair, 'stair_steps') else stair.num_steps
+            effective_steps = stair.num_steps / 2 if stair.stair_type == 'u-shaped' else stair.num_steps
             tread_mm = (stair.length / effective_steps) * 1000 if effective_steps > 0 else 0
             
             if riser_mm > profile.max_riser_mm or tread_mm < profile.min_tread_mm:

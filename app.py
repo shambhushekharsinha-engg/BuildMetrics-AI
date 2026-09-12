@@ -127,7 +127,7 @@ if st.session_state.user_id:
                     st.session_state.prompt_parsed = proj_data["data"]
                     st.session_state.plot_length = proj_data["l"]
                     st.session_state.plot_width = proj_data["w"]
-                    st.session_state.num_floors = proj_data["floors"]
+                    st.session_state.num_floors = proj_data["floors"]\n                    st.session_state.force_generate = True
                     st.success("Loaded! Click Generate.")
 
 with st.sidebar.expander("🤖 Agentic Architect Chat", expanded=False):
@@ -148,106 +148,130 @@ with st.sidebar.expander("🤖 Agentic Architect Chat", expanded=False):
                 new_instruction = response.text.strip()
                 st.session_state.chat_history.append({"role": "assistant", "content": f"Understood. I will redesign based on: {new_instruction}"})
                 # Override the manual prompt
-                st.session_state.ai_override_prompt = new_instruction
+                st.session_state.ai_override_prompt = new_instruction\n                st.session_state.force_generate = True
                 st.rerun()
             except Exception as e:
                 st.error(f"AI Error: {str(e)}")
 
-st.sidebar.header("🕹️ Building Control Panel")
 
-# 1. Prompt Input
-prompt_val = st.session_state.get("ai_override_prompt", "Modern 2-story villa with living room, master bedroom, 2 guest bedrooms, kitchen, 6 pillars, wide balcony, main gate, and front garden area")
-prompt_input = st.sidebar.text_area(
-    "Natural Language Design Prompt",
-    value=prompt_val,
-    height=80,
-    help="Specify architectural style, room requests, floors, pillars, beams, main gate, garden, or special details.",
-)
-if prompt_input != prompt_val and "ai_override_prompt" in st.session_state:
-    st.session_state.ai_override_prompt = prompt_input # Manual edit overrides AI
+if "wd" not in st.session_state:
+    st.session_state.wd = {
+        "prompt": "Modern 2-story villa with living room, master bedroom, 2 guest bedrooms, kitchen, 6 pillars, wide balcony, main gate, and front garden area",
+        "style": "Modern",
+        "plot_length": 20.0, "plot_width": 15.0, "num_floors": 2, "max_height": 9.0,
+        "wall_thickness": 25, "margin": 2.0,
+        "gate": "Double Swing Gate", "garden": "Front Garden & Lawn",
+        "theme": "Classic Blueprint",
+        "show_dims": True, "show_pillars": True, "show_beams": True, "show_stairs": True,
+        "show_labels": True, "show_fixtures": True, "show_axis": True, "show_hatches": True,
+        "show_compass": True, "show_boundary": True, "show_title": True, "show_pathway": True,
+        "show_gate": False, "show_garden_toggle": False
+    }
 
-# 2. Architectural Style
-style_option = st.sidebar.selectbox(
-    "Architectural Style",
-    options=[s.value for s in ArchitecturalStyle],
-    index=0,
-)
-selected_style = next(s for s in ArchitecturalStyle if s.value == style_option)
+wd = st.session_state.wd
 
-# 3. Plot Dimensions
-st.sidebar.subheader("📐 Plot & Building Constraints")
-col_p1, col_p2 = st.sidebar.columns(2)
-with col_p1:
-    plot_length = st.number_input("Plot Length (X) [m]", min_value=5.0, max_value=1000.0, value=20.0, step=1.0)
-    num_floors = st.number_input("Floors", min_value=1, max_value=100, value=2, step=1)
-with col_p2:
-    plot_width = st.number_input("Plot Width (Y) [m]", min_value=5.0, max_value=1000.0, value=15.0, step=1.0)
-    max_height = st.number_input("Max Height [m]", min_value=3.0, max_value=350.0, value=9.0, step=0.5)
+if "ai_override_prompt" in st.session_state and st.session_state.ai_override_prompt:
+    wd["prompt"] = st.session_state.ai_override_prompt
+    st.session_state.ai_override_prompt = None
 
-col_p3, col_p4 = st.sidebar.columns(2)
-with col_p3:
-    wall_thickness = st.number_input("Wall Thickness [cm]", min_value=10, max_value=100, value=25, step=5) / 100.0
-with col_p4:
-    margin_setback = st.number_input("Setback Margin [m]", min_value=0.0, max_value=50.0, value=2.0, step=0.5)
+st.sidebar.header("🕹️ Guided Setup")
+wizard_tabs = st.sidebar.tabs(["📐 Plot", "📝 Reqs", "🎨 Style", "✅ Review"])
 
-# 3b. Main Gate & Landscaping Settings
-st.sidebar.subheader("🚪 Compound Gate & Garden")
-gate_type_sel = st.sidebar.selectbox(
-    "Main Gate Type",
-    options=["Double Swing Gate", "Sliding Gate", "Modern Slat Gate", "Wrought Iron Gate"],
-    index=0,
-)
-gate_type_code_map = {
-    "Double Swing Gate": "double_swing",
-    "Sliding Gate": "sliding",
-    "Modern Slat Gate": "modern_slat",
-    "Wrought Iron Gate": "wrought_iron",
-}
+with wizard_tabs[0]:
+    st.subheader("Plot Dimensions")
+    col_p1, col_p2 = st.columns(2)
+    with col_p1:
+        wd["plot_length"] = st.number_input("Length (X) [m]", min_value=5.0, max_value=1000.0, value=wd["plot_length"], step=1.0)
+        wd["num_floors"] = st.number_input("Floors", min_value=1, max_value=100, value=wd["num_floors"], step=1)
+    with col_p2:
+        wd["plot_width"] = st.number_input("Width (Y) [m]", min_value=5.0, max_value=1000.0, value=wd["plot_width"], step=1.0)
+        wd["max_height"] = st.number_input("Max Height [m]", min_value=3.0, max_value=350.0, value=wd["max_height"], step=0.5)
 
-garden_style_sel = st.sidebar.selectbox(
-    "Garden & Lawn Layout",
-    options=["Front Garden & Lawn", "Courtyard Garden", "Wrap-around Garden"],
-    index=0,
-)
+    col_p3, col_p4 = st.columns(2)
+    with col_p3:
+        wd["wall_thickness"] = st.number_input("Wall Thick [cm]", min_value=10, max_value=100, value=wd["wall_thickness"], step=5)
+    with col_p4:
+        wd["margin"] = st.number_input("Setback [m]", min_value=0.0, max_value=50.0, value=wd["margin"], step=0.5)
 
-# 4. Blueprint 2D Styling Controls
-st.sidebar.subheader("🎨 2D Theme & Annotations")
-blueprint_theme = st.sidebar.selectbox(
-    "Blueprint Color Theme",
-    options=["Classic Blueprint", "Architectural Dark", "Paper White", "Japandi Earth", "Scandinavian Light", "Tropical Emerald"],
-    index=0,
-)
+with wizard_tabs[1]:
+    st.subheader("Building Requirements")
+    wd["prompt"] = st.text_area("Design Prompt", value=wd["prompt"], height=100, help="Specify rooms, layout, features.")
+    
+    wd["gate"] = st.selectbox("Main Gate Type", options=["Double Swing Gate", "Sliding Gate", "Modern Slat Gate", "Wrought Iron Gate"], index=["Double Swing Gate", "Sliding Gate", "Modern Slat Gate", "Wrought Iron Gate"].index(wd["gate"]))
+    wd["garden"] = st.selectbox("Garden Layout", options=["Front Garden & Lawn", "Courtyard Garden", "Wrap-around Garden"], index=["Front Garden & Lawn", "Courtyard Garden", "Wrap-around Garden"].index(wd["garden"]))
 
-prompt_parsed = InputHandler.parse_prompt(prompt_input)
-# Override style and gate/garden settings from explicit dropdowns
-prompt_parsed["style"] = selected_style
-prompt_parsed["main_gate_type"] = gate_type_code_map.get(gate_type_sel, "double_swing")
+with wizard_tabs[2]:
+    st.subheader("Architectural Style & 2D Options")
+    
+    style_options = [s.value for s in ArchitecturalStyle]
+    if wd["style"] not in style_options: wd["style"] = style_options[0]
+    wd["style"] = st.selectbox("Style", options=style_options, index=style_options.index(wd["style"]))
+    
+    wd["theme"] = st.selectbox("2D Theme", options=["Classic Blueprint", "Architectural Dark", "Paper White", "Japandi Earth", "Scandinavian Light", "Tropical Emerald"], index=["Classic Blueprint", "Architectural Dark", "Paper White", "Japandi Earth", "Scandinavian Light", "Tropical Emerald"].index(wd["theme"]))
+    
+    c1, c2 = st.columns(2)
+    with c1:
+        wd["show_dims"] = st.checkbox("Dimensions", value=wd["show_dims"])
+        wd["show_pillars"] = st.checkbox("Pillars", value=wd["show_pillars"])
+        wd["show_beams"] = st.checkbox("Beams", value=wd["show_beams"])
+        wd["show_stairs"] = st.checkbox("Stairs", value=wd["show_stairs"])
+        wd["show_gate"] = st.checkbox("Main Gate", value=wd["show_gate"])
+    with c2:
+        wd["show_labels"] = st.checkbox("Room Labels", value=wd["show_labels"])
+        wd["show_fixtures"] = st.checkbox("Furniture", value=wd["show_fixtures"])
+        wd["show_axis"] = st.checkbox("Axis Grid", value=wd["show_axis"])
+        wd["show_hatches"] = st.checkbox("Wall Hatches", value=wd["show_hatches"])
+        wd["show_garden_toggle"] = st.checkbox("Garden", value=wd["show_garden_toggle"])
+    
+    c3, c4 = st.columns(2)
+    with c3:
+        wd["show_compass"] = st.checkbox("Compass", value=wd["show_compass"])
+        wd["show_boundary"] = st.checkbox("Boundary", value=wd["show_boundary"])
+    with c4:
+        wd["show_title"] = st.checkbox("Title Block", value=wd["show_title"])
+        wd["show_pathway"] = st.checkbox("Pathway", value=wd["show_pathway"])
 
-col_opt1, col_opt2 = st.sidebar.columns(2)
-with col_opt1:
-    show_dims = st.checkbox("Show Dimensions", value=True)
-    show_pillars = st.checkbox("Show Pillars", value=True)
-    show_beams = st.checkbox("Show Beams", value=True)
-    show_stairs = st.checkbox("Show Stairs", value=True)
-    show_gate = st.checkbox("Main Gate", value=prompt_parsed.get("include_main_gate", False))
-with col_opt2:
-    show_labels = st.checkbox("Room Labels", value=True)
-    show_fixtures = st.checkbox("Furniture CAD", value=True)
-    show_axis_grid = st.checkbox("Axis Grid (A,1)", value=True)
-    show_hatches = st.checkbox("Wall Hatches", value=True)
-    show_garden = st.checkbox("Garden & Lawn", value=value if (value := prompt_parsed.get("include_garden", False)) else False)
+prompt_parsed = InputHandler.parse_prompt(wd["prompt"])
+# Synchronize explicit toggles with the prompt parsed flags
+prompt_parsed["style"] = next(s for s in ArchitecturalStyle if s.value == wd["style"])
+gate_type_code_map = {"Double Swing Gate": "double_swing", "Sliding Gate": "sliding", "Modern Slat Gate": "modern_slat", "Wrought Iron Gate": "wrought_iron"}
+prompt_parsed["main_gate_type"] = gate_type_code_map.get(wd["gate"], "double_swing")
+prompt_parsed["include_main_gate"] = wd["show_gate"]
+prompt_parsed["include_garden"] = wd["show_garden_toggle"]
 
-col_opt3, col_opt4 = st.sidebar.columns(2)
-with col_opt3:
-    show_compass = st.checkbox("Compass Rose", value=True)
-    show_boundary = st.checkbox("Boundary Wall", value=True)
-with col_opt4:
-    show_title = st.checkbox("Title Block", value=True)
-    show_pathway = st.checkbox("Paved Walkway", value=True)
+with wizard_tabs[3]:
+    st.subheader("Review & Generate")
+    st.write(f"**Footprint**: {wd['plot_length']}m x {wd['plot_width']}m")
+    st.write(f"**Levels**: {wd['num_floors']} Floors")
+    st.write(f"**Style**: {wd['style']}")
+    
+    # We map variables to the legacy names so the rest of the code works
+    plot_length = wd["plot_length"]
+    plot_width = wd["plot_width"]
+    num_floors = wd["num_floors"]
+    max_height = wd["max_height"]
+    wall_thickness = wd["wall_thickness"] / 100.0
+    margin_setback = wd["margin"]
+    selected_style = prompt_parsed["style"]
+    
+    blueprint_theme = wd["theme"]
+    show_dims = wd["show_dims"]
+    show_pillars = wd["show_pillars"]
+    show_beams = wd["show_beams"]
+    show_stairs = wd["show_stairs"]
+    show_gate = wd["show_gate"]
+    show_labels = wd["show_labels"]
+    show_fixtures = wd["show_fixtures"]
+    show_axis_grid = wd["show_axis"]
+    show_hatches = wd["show_hatches"]
+    show_garden = wd["show_garden_toggle"]
+    show_compass = wd["show_compass"]
+    show_boundary = wd["show_boundary"]
+    show_title = wd["show_title"]
+    show_pathway = wd["show_pathway"]
+    
+    generate_clicked = st.button("🚀 Generate Blueprint", type="primary", use_container_width=True)
 
-# Apply UI toggle selections to parsed prompt
-prompt_parsed["include_main_gate"] = show_gate
-prompt_parsed["include_garden"] = show_garden
 
 # Process Input & Generate Spatial Model
 plot_dims = InputHandler.create_plot_dimensions(
@@ -271,7 +295,15 @@ current_inputs = {
 
 inputs_changed = current_inputs != st.session_state.get("last_inputs")
 
-if inputs_changed or "building_id" not in st.session_state or "building_model_cache" not in st.session_state:
+needs_initial_load = "building_id" not in st.session_state or "building_model_cache" not in st.session_state
+should_generate = generate_clicked or needs_initial_load or st.session_state.get("force_generate", False)
+if "force_generate" in st.session_state: st.session_state.force_generate = False
+
+if inputs_changed and not should_generate and not needs_initial_load:
+    with wizard_tabs[3]:
+        st.info("Inputs changed! Click Generate to apply.")
+
+if should_generate:
     with st.spinner("Generating building architecture via API..."):
         try:
             resp = requests.post(
