@@ -97,6 +97,11 @@ with st.sidebar.expander("👤 User Authentication", expanded=not st.session_sta
                 else:
                     st.error(msg)
 
+if "session_expiry" in st.session_state and __import__("time").time() > st.session_state.session_expiry:
+    st.session_state.user_id = None
+    st.session_state.username = None
+st.session_state.session_expiry = __import__("time").time() + 3600
+
 if st.session_state.user_id:
     with st.sidebar.expander("📁 Saved Projects"):
         proj_name = st.text_input("Project Name")

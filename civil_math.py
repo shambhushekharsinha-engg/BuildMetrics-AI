@@ -48,4 +48,4 @@ def calculate_quantities(area_sqft, perimeter_ft, floors):
         'dry_mortar_cum': round(dry_mortar_cum, 2),
         'estimated_days': labor_stats['estimated_days'],
         'total_mandays': labor_stats['total_mandays']
-    }
+    }

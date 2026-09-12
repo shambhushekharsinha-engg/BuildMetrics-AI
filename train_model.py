@@ -59,3 +59,16 @@ pipeline.fit(X, y)
 print('Saving model...')
 joblib.dump(pipeline, 'cost_model.pkl')
 print('Model saved to cost_model.pkl')
+
+import json
+from datetime import datetime
+metrics = {
+    "version": "1.0.0",
+    "mae": mae,
+    "r2": r2,
+    "algorithm": "RandomForestRegressor",
+    "date": datetime.now().isoformat()
+}
+with open('cost_model_meta.json', 'w') as f:
+    json.dump(metrics, f, indent=2)
+print('Model metadata saved to cost_model_meta.json')
