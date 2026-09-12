@@ -1,3 +1,5 @@
+import requests
+from pydantic import TypeAdapter
 """
 Buildmetrics AI — AI-Powered Architectural Blueprint Generator
 Interactive Web Application powered by Streamlit and Three.js.
@@ -9,14 +11,12 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import streamlit as st
+import os
+API_BASE_URL = os.environ.get("API_BASE_URL", "http://localhost:8000")
 import streamlit.components.v1 as components
 
-from build_matrix.models import ArchitecturalStyle, Blueprint2DConfig
+from build_matrix.models import ArchitecturalStyle, Blueprint2DConfig, BuildingModel
 from build_matrix.input_handler import InputHandler
-from build_matrix.layout_engine import LayoutEngine
-from build_matrix.drawing_2d import Blueprint2DRenderer
-from build_matrix.rendering_3d import Blueprint3DRenderer
-from build_matrix.exporter import ExporterEngine
 
 # Streamlit Page Config
 st.set_page_config(
@@ -260,8 +260,27 @@ plot_dims = InputHandler.create_plot_dimensions(
 )
 
 # Generate Building Model using LayoutEngine
-layout_engine = LayoutEngine(plot=plot_dims, style=selected_style)
-building_model = layout_engine.generate_building(prompt_parsed=prompt_parsed)
+with st.spinner("Generating building architecture via API..."):
+    try:
+        resp = requests.post(
+            f"{API_BASE_URL}/api/v1/generate",
+            json={
+                "prompt": prompt_parsed.get("raw_prompt", ""),
+                "plot_length": plot_dims.length,
+                "plot_width": plot_dims.width,
+                "max_height": plot_dims.max_height,
+                "num_floors": plot_dims.num_floors,
+                "style": selected_style.value
+            },
+            timeout=30
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        st.session_state.building_id = data["building_id"]
+        building_model = TypeAdapter(BuildingModel).validate_python(data["model"])
+    except Exception as e:
+        st.error(f"Failed to generate building: {e}")
+        st.stop()
 
 # Top Key Metrics Summary
 total_built = sum(building_model.total_building_area(f) for f in range(1, plot_dims.num_floors + 1))
@@ -333,9 +352,38 @@ with tab_2d:
             dpi=200,
         )
 
-        renderer_2d = Blueprint2DRenderer(config=config_2d)
-        fig_2d = renderer_2d.render(building_model, floor=selected_floor)
-        st.pyplot(fig_2d, clear_figure=True)
+        with st.spinner("Rendering 2D Blueprint via API..."):
+            try:
+                resp = requests.post(
+                    f"{API_BASE_URL}/api/v1/render/2d",
+                    json={
+                        "building_id": st.session_state.building_id,
+                        "grid_spacing": config_2d.grid_spacing,
+                        "show_grid": config_2d.show_grid,
+                        "show_dimensions": config_2d.show_dimensions,
+                        "show_pillars": config_2d.show_pillars,
+                        "show_beams": config_2d.show_beams,
+                        "show_stairs": config_2d.show_stairs,
+                        "show_fixtures": config_2d.show_fixtures,
+                        "show_axis_grid": config_2d.show_axis_grid,
+                        "show_hatches": config_2d.show_hatches,
+                        "show_room_labels": config_2d.show_room_labels,
+                        "show_title_block": config_2d.show_title_block,
+                        "show_compass": config_2d.show_compass,
+                        "show_main_gate": config_2d.show_main_gate,
+                        "show_garden": config_2d.show_garden,
+                        "show_boundary_wall": config_2d.show_boundary_wall,
+                        "show_pathway": config_2d.show_pathway,
+                        "dpi": config_2d.dpi,
+                        "theme": config_2d.theme,
+                        "floor": selected_floor
+                    },
+                    timeout=15
+                )
+                resp.raise_for_status()
+                st.image(resp.content, use_column_width=True)
+            except Exception as e:
+                st.error(f"Failed to render 2D blueprint: {e}")
 
 
 # ---------------------------------------------------------
@@ -345,8 +393,14 @@ with tab_3d:
     st.subheader("Interactive 3D WebGL Blueprint Viewport")
     st.caption("Use your mouse to orbit, pan, and zoom the 3D model. Switch render modes inside the viewport.")
 
-    renderer_3d = Blueprint3DRenderer(building_model)
-    html_3d_code = renderer_3d.generate_threejs_html()
+    with st.spinner("Rendering 3D Model via API..."):
+        try:
+            resp = requests.post(f"{API_BASE_URL}/api/v1/render/3d", json={"building_id": st.session_state.building_id}, timeout=15)
+            resp.raise_for_status()
+            html_3d_code = resp.text
+        except Exception as e:
+            st.error(f"Failed to render 3D model: {e}")
+            html_3d_code = "" 
 
     # Embed Three.js 3D Viewport HTML Component
     components.html(html_3d_code, height=650, scrolling=False)
@@ -560,33 +614,49 @@ with tab_export:
     with col_e1:
         st.markdown("#### 🖼️ 2D PNG Image")
         png_path = os.path.join(temp_dir, "blueprint_2d.png")
-        ExporterEngine.export_2d_png(building_model, png_path, floor=1, config=config_2d)
-        with open(png_path, "rb") as f:
-            st.download_button("Download 2D PNG", f, file_name="BUILD-MATRIX_2D_Blueprint.png", mime="image/png")
+        with st.spinner("Exporting PNG..."):
+            try:
+                resp = requests.post(f"{API_BASE_URL}/api/v1/export", json={"building_id": st.session_state.building_id, "format": "png", "floor": 1}, timeout=15)
+                resp.raise_for_status()
+                st.download_button("Download 2D PNG", resp.content, file_name="BUILD-MATRIX_2D_Blueprint.png", mime="image/png")
+            except Exception as e:
+                st.error(f"Export failed: {e}")
 
     # 2. 2D SVG Export
     with col_e2:
         st.markdown("#### 📐 2D SVG Vector")
         svg_path = os.path.join(temp_dir, "blueprint_2d.svg")
-        ExporterEngine.export_2d_svg(building_model, svg_path, floor=1, config=config_2d)
-        with open(svg_path, "rb") as f:
-            st.download_button("Download 2D SVG", f, file_name="BUILD-MATRIX_2D_Blueprint.svg", mime="image/svg+xml")
+        with st.spinner("Exporting SVG..."):
+            try:
+                resp = requests.post(f"{API_BASE_URL}/api/v1/export", json={"building_id": st.session_state.building_id, "format": "svg", "floor": 1}, timeout=15)
+                resp.raise_for_status()
+                st.download_button("Download 2D SVG", resp.content, file_name="BUILD-MATRIX_2D_Blueprint.svg", mime="image/svg+xml")
+            except Exception as e:
+                st.error(f"Export failed: {e}")
 
     # 3. 2D PDF Document
     with col_e3:
         st.markdown("#### 📄 2D PDF Plan")
         pdf_path = os.path.join(temp_dir, "blueprint_2d.pdf")
-        ExporterEngine.export_2d_pdf(building_model, pdf_path, floor=1, config=config_2d)
-        with open(pdf_path, "rb") as f:
-            st.download_button("Download 2D PDF", f, file_name="BUILD-MATRIX_2D_Blueprint.pdf", mime="application/pdf")
+        with st.spinner("Exporting PDF..."):
+            try:
+                resp = requests.post(f"{API_BASE_URL}/api/v1/export", json={"building_id": st.session_state.building_id, "format": "pdf", "floor": 1}, timeout=15)
+                resp.raise_for_status()
+                st.download_button("Download 2D PDF", resp.content, file_name="BUILD-MATRIX_2D_Blueprint.pdf", mime="application/pdf")
+            except Exception as e:
+                st.error(f"Export failed: {e}")
 
     # 4. 3D OBJ Mesh
     with col_e4:
         st.markdown("#### 🧊 3D OBJ Mesh")
         obj_path = os.path.join(temp_dir, "model_3d.obj")
-        ExporterEngine.export_3d_obj(building_model, obj_path)
-        with open(obj_path, "rb") as f:
-            st.download_button("Download 3D OBJ", f, file_name="BUILD-MATRIX_3D_Model.obj", mime="model/obj")
+        with st.spinner("Exporting OBJ..."):
+            try:
+                resp = requests.post(f"{API_BASE_URL}/api/v1/export", json={"building_id": st.session_state.building_id, "format": "obj"}, timeout=15)
+                resp.raise_for_status()
+                st.download_button("Download 3D OBJ", resp.content, file_name="BUILD-MATRIX_3D_Model.obj", mime="model/obj")
+            except Exception as e:
+                st.error(f"Export failed: {e}")
 
     st.divider()
 
