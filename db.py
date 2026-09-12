@@ -1,7 +1,7 @@
 import sqlite3
 import json
-import hashlib
-from datetime import datetime
+from datetime import datetime, timedelta
+from passlib.hash import bcrypt
 
 DB_FILE = 'buildmetrics.db'
 
@@ -21,12 +21,14 @@ def init_db():
         )
     ''')
     
-    # User authentication table
+    # User authentication table with brute-force tracking
     c.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE,
-            password_hash TEXT
+            password_hash TEXT,
+            failed_attempts INTEGER DEFAULT 0,
+            lockout_until TEXT
         )
     ''')
     
@@ -47,14 +49,12 @@ def init_db():
     conn.commit()
     conn.close()
 
-def hash_password(password):
-    return hashlib.sha256(password.encode()).hexdigest()
-
 def create_user(username, password):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
     try:
-        c.execute('INSERT INTO users (username, password_hash) VALUES (?, ?)', (username, hash_password(password)))
+        pw_hash = bcrypt.hash(password)
+        c.execute('INSERT INTO users (username, password_hash) VALUES (?, ?)', (username, pw_hash))
         conn.commit()
         success = True
     except sqlite3.IntegrityError:
@@ -65,10 +65,47 @@ def create_user(username, password):
 def verify_user(username, password):
     conn = sqlite3.connect(DB_FILE)
     c = conn.cursor()
-    c.execute('SELECT id FROM users WHERE username = ? AND password_hash = ?', (username, hash_password(password)))
+    c.execute('SELECT id, password_hash, failed_attempts, lockout_until FROM users WHERE username = ?', (username,))
     user = c.fetchone()
-    conn.close()
-    return user[0] if user else None
+    
+    if not user:
+        conn.close()
+        return None, "Invalid credentials"
+        
+    uid, pw_hash, failed_attempts, lockout_until = user
+    
+    # Check if account is locked
+    if lockout_until:
+        lockout_time = datetime.fromisoformat(lockout_until)
+        if datetime.now() < lockout_time:
+            conn.close()
+            return None, f"Account locked until {lockout_time.strftime('%H:%M:%S')}"
+        else:
+            # Lockout expired, reset attempts
+            failed_attempts = 0
+            c.execute('UPDATE users SET failed_attempts = 0, lockout_until = NULL WHERE id = ?', (uid,))
+            conn.commit()
+            
+    # Verify password
+    if bcrypt.verify(password, pw_hash):
+        c.execute('UPDATE users SET failed_attempts = 0, lockout_until = NULL WHERE id = ?', (uid,))
+        conn.commit()
+        conn.close()
+        return uid, "Success"
+    else:
+        # Brute force protection: increment failed attempts
+        failed_attempts += 1
+        if failed_attempts >= 5:
+            lockout = (datetime.now() + timedelta(minutes=15)).isoformat()
+            c.execute('UPDATE users SET failed_attempts = ?, lockout_until = ? WHERE id = ?', (failed_attempts, lockout, uid))
+            conn.commit()
+            conn.close()
+            return None, "Account locked due to 5 failed attempts (15 min lockout)."
+        else:
+            c.execute('UPDATE users SET failed_attempts = ? WHERE id = ?', (failed_attempts, uid))
+            conn.commit()
+            conn.close()
+            return None, f"Invalid credentials. {5 - failed_attempts} attempts remaining."
 
 def save_project(user_id, project_name, plot_length, plot_width, num_floors, prompt_data):
     conn = sqlite3.connect(DB_FILE)

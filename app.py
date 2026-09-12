@@ -89,13 +89,13 @@ with st.sidebar.expander("👤 User Authentication", expanded=not st.session_sta
                 else:
                     st.error("Username already exists.")
             else:
-                uid = db.verify_user(uname, pwd)
+                uid, msg = db.verify_user(uname, pwd)
                 if uid:
                     st.session_state.user_id = uid
                     st.session_state.username = uname
                     st.rerun()
                 else:
-                    st.error("Invalid credentials.")
+                    st.error(msg)
 
 if st.session_state.user_id:
     with st.sidebar.expander("📁 Saved Projects"):
@@ -501,10 +501,10 @@ with tab_eng:
         st.info("Uses ensemble NLP (similar to Peyman Jafary et al. 2025) to map extracted structural quantities to standard regional construction databases.")
     with nlp_col2:
         nlp_boq_data = [
-            {"Raw Extracted Item": "Reinforcement Steel (Tons)", "NLP Matched MasterFormat": "03 21 00 - Reinforcing Steel", "Confidence": "98%"},
-            {"Raw Extracted Item": "Concrete Volume (m³)", "NLP Matched MasterFormat": "03 30 00 - Cast-in-Place Concrete", "Confidence": "95%"},
-            {"Raw Extracted Item": "Brickwork / Blockwork Area", "NLP Matched MasterFormat": "04 22 00 - Concrete Unit Masonry", "Confidence": "92%"},
-            {"Raw Extracted Item": "Glass Window Area (m²)", "NLP Matched MasterFormat": "08 50 00 - Windows", "Confidence": "89%"}
+            {"Raw Extracted Item": "Reinforcement Steel", "NLP Matched MasterFormat": "03 21 00 - Reinforcing Steel"},
+            {"Raw Extracted Item": "Concrete Volume", "NLP Matched MasterFormat": "03 30 00 - Cast-in-Place Concrete"},
+            {"Raw Extracted Item": "Brickwork / Blockwork", "NLP Matched MasterFormat": "04 22 00 - Concrete Unit Masonry"},
+            {"Raw Extracted Item": "Glass Window Area", "NLP Matched MasterFormat": "08 50 00 - Windows"}
         ]
         st.table(nlp_boq_data)
 
@@ -599,15 +599,6 @@ with tab_export:
                 use_container_width=True,
             )
 
-    with col_e6:
-        st.markdown("#### 🌐 Standalone 3D Interactive HTML")
-        html_path = os.path.join(temp_dir, "viewer_3d.html")
-        ExporterEngine.export_3d_html(building_model, html_path)
-        with open(html_path, "rb") as f:
-            st.download_button(
-                "🌐 Download Interactive 3D Web Viewer (HTML)",
-                f,
-                file_name="BUILD-MATRIX_3D_Interactive.html",
-                mime="text/html",
-                use_container_width=True,
-            )
+# --- LEGAL DISCLAIMER ---
+st.markdown("---")
+st.warning("**LEGAL DISCLAIMER:** Outputs are AI-generated preliminaries. They must be reviewed and signed off by a licensed structural engineer or architect before any construction use. Buildmetrics AI assumes no liability for structural integrity.")
