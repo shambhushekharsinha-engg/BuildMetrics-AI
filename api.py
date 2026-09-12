@@ -14,6 +14,47 @@ from build_matrix.drawing_2d import Blueprint2DRenderer
 from build_matrix.exporter import ExporterEngine
 
 app = FastAPI(title="BUILD-MATRIX.ai API", version="1.0.0")
+from fastapi.middleware.cors import CORSMiddleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+import logging
+import time
+import uuid
+from pythonjsonlogger import jsonlogger
+from fastapi import Request
+
+logger = logging.getLogger("buildmetrics_api")
+logger.setLevel(logging.INFO)
+logHandler = logging.StreamHandler()
+formatter = jsonlogger.JsonFormatter('%(asctime)s %(levelname)s %(name)s %(message)s')
+logHandler.setFormatter(formatter)
+if not logger.handlers:
+    logger.addHandler(logHandler)
+
+@app.middleware("http")
+async def add_request_id_and_log(request: Request, call_next):
+    request_id = str(uuid.uuid4())
+    start_time = time.time()
+    logger.info("Request started", extra={"request_id": request_id, "path": request.url.path, "method": request.method})
+    
+    response = await call_next(request)
+    
+    process_time = time.time() - start_time
+    response.headers["X-Request-ID"] = request_id
+    logger.info("Request completed", extra={
+        "request_id": request_id, 
+        "path": request.url.path, 
+        "status_code": response.status_code,
+        "latency_sec": round(process_time, 4)
+    })
+    return response
+
 
 # In-memory store for active building models
 # Real-world: Use Redis + proper serialization

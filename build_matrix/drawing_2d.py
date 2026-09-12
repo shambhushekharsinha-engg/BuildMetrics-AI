@@ -585,7 +585,6 @@ class Blueprint2DRenderer:
         ax.text(bx + block_w*0.35, by + 1.4, f"FLOOR LEVEL: {meta['FLOOR_LEVEL']}", color=theme["text"], fontsize=7, fontweight="bold", zorder=22)
         ax.text(bx + block_w*0.35, by + 0.8, f"PLOT: {meta['PLOT_DIMENSIONS']}", color=theme["dim"], fontsize=6, zorder=22)
         ax.text(bx + block_w*0.35, by + 0.3, f"BUILT AREA: {meta['TOTAL_BUILT_AREA']}", color=theme["dim"], fontsize=6, zorder=22)
-        ax.text(bx + block_w*0.35, by - 0.2, "COMPLIANCE: EGRESS (PASS) / AREA (PASS)", color=theme["text"], fontsize=6, fontweight="bold", zorder=22)
 
         # Content Right: Meta
         import datetime
