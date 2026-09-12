@@ -441,6 +441,56 @@ class Blueprint3DRenderer:
             renderer.toneMapping = THREE.ACESFilmicToneMapping; // Photorealistic tone mapping
             renderer.toneMappingExposure = 1.0;
             container.appendChild(renderer.domElement);
+            
+            // Phase 9: PBR & Sun-path Daylighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+            scene.add(ambientLight);
+            
+            const sunLight = new THREE.DirectionalLight(0xffeeb1, 1.5);
+            sunLight.position.set(50, 100, 20);
+            sunLight.castShadow = true;
+            sunLight.shadow.mapSize.width = 2048;
+            sunLight.shadow.mapSize.height = 2048;
+            scene.add(sunLight);
+            
+            // X-Ray / Section Toggle UI Overlay
+            const uiDiv = document.createElement('div');
+            uiDiv.style.position = 'absolute';
+            uiDiv.style.top = '10px';
+            uiDiv.style.right = '10px';
+            uiDiv.style.zIndex = '100';
+            uiDiv.style.background = 'rgba(0,0,0,0.7)';
+            uiDiv.style.padding = '10px';
+            uiDiv.style.borderRadius = '5px';
+            uiDiv.style.color = '#fff';
+            uiDiv.style.fontFamily = 'sans-serif';
+            uiDiv.innerHTML = `
+                <label style="cursor:pointer; display:block; margin-bottom:5px;">
+                    <input type="checkbox" id="xrayToggle"> Enable X-Ray Mode
+                </label>
+                <label style="cursor:pointer; display:block;">
+                    <input type="range" id="sunPath" min="0" max="100" value="50"> Sun Path
+                </label>
+            `;
+            container.appendChild(uiDiv);
+            
+            document.getElementById('xrayToggle').addEventListener('change', (e) => {
+                const isXray = e.target.checked;
+                scene.traverse((child) => {
+                    if (child.isMesh && child.material && child.material.name !== 'wireframe') {
+                        child.material.transparent = true;
+                        child.material.opacity = isXray ? 0.3 : 1.0;
+                        child.material.needsUpdate = true;
+                    }
+                });
+            });
+            
+            document.getElementById('sunPath').addEventListener('input', (e) => {
+                const val = e.target.value / 100; // 0 to 1
+                const angle = val * Math.PI; // Sunrise to sunset
+                sunLight.position.set(Math.cos(angle) * 100, Math.sin(angle) * 100, 20);
+            });
+
 
             const controls = new THREE.OrbitControls(camera, renderer.domElement);
             controls.target.set(data.plot.length / 2, 0, data.plot.width / 2);

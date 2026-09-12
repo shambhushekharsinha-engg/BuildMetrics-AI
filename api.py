@@ -121,6 +121,10 @@ def export_file(req: ExportRequest):
             path = os.path.join(temp_dir, "model.obj")
             ExporterEngine.export_3d_obj(model, path)
             return FileResponse(path, media_type="model/obj", filename="BUILD-MATRIX_3D.obj")
+        elif req.format == "gltf":
+            path = os.path.join(temp_dir, "model.gltf")
+            ExporterEngine.export_3d_gltf(model, path)
+            return FileResponse(path, media_type="model/gltf+json", filename="BUILD-MATRIX_3D.gltf")
         elif req.format == "html":
             path = os.path.join(temp_dir, "viewer.html")
             ExporterEngine.export_3d_html(model, path)
