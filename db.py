@@ -2,7 +2,7 @@ import os
 import json
 from datetime import datetime, timedelta
 import bcrypt
-from sqlalchemy import create_engine, Column, Integer, String, Float, Text, DateTime
+from sqlalchemy import create_engine, Column, Integer, String, Float, Text, DateTime, ForeignKey
 from sqlalchemy.orm import declarative_base, sessionmaker, scoped_session
 from sqlalchemy.pool import QueuePool, SingletonThreadPool
 
@@ -19,7 +19,7 @@ class User(Base):
 class SavedProject(Base):
     __tablename__ = 'saved_projects'
     id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(Integer, nullable=False)
+    user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
     project_name = Column(String, nullable=False)
     timestamp = Column(DateTime, default=datetime.now)
     plot_length = Column(Float)
@@ -132,14 +132,19 @@ repo = DatabaseRepository()
 def init_db():
     """Runs Alembic migrations programmatically to ensure schema is up to date."""
     import sys
+    import os
     from alembic.config import Config
     from alembic import command
     
     # If the database doesn't exist, this will run migrations.
     # In a real deployed PG environment, we'd run this outside the app, but this keeps Streamlit usage seamless.
+    ini_path = os.path.join(os.path.dirname(__file__), "alembic.ini")
     try:
-        alembic_cfg = Config("alembic.ini")
+        alembic_cfg = Config(ini_path)
         command.upgrade(alembic_cfg, "head")
     except Exception as e:
-        print(f"Migration error (ignoring if running in tests): {e}")
+        if "pytest" in sys.modules:
+            print(f"Migration error ignored during tests: {e}")
+        else:
+            raise RuntimeError(f"Database migration failed. Are you sure 'alembic.ini' exists and DB is accessible? Error: {e}") from e
 
