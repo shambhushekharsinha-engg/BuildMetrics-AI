@@ -433,29 +433,71 @@ class Blueprint3DRenderer:
             camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
             camera.position.set(data.plot.length * 1.4, data.plot.height * 2.2, data.plot.width * 1.6);
 
-            renderer = new THREE.WebGLRenderer({{ antialias: true }});
+            renderer = new THREE.WebGLRenderer({{ antialias: true, alpha: true }});
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(window.devicePixelRatio);
             renderer.shadowMap.enabled = true;
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap; // Advanced Soft Shadows
+            renderer.toneMapping = THREE.ACESFilmicToneMapping; // Photorealistic tone mapping
+            renderer.toneMappingExposure = 1.0;
             container.appendChild(renderer.domElement);
 
-            controls = new THREE.OrbitControls(camera, renderer.domElement);
-            controls.target.set(data.plot.length / 2, data.plot.height / 3, data.plot.width / 2);
+            const controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.target.set(data.plot.length / 2, 0, data.plot.width / 2);
             controls.update();
 
             // Lighting
-            ambientLight = new THREE.AmbientLight(0xffffff, 0.75);
+            ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
             scene.add(ambientLight);
 
-            dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
-            dirLight.position.set(data.plot.length * 2, 40, data.plot.width * 2);
+            dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+            dirLight.position.set(data.plot.length * 2, data.plot.length * 2, data.plot.width * 2);
             dirLight.castShadow = true;
+            dirLight.shadow.mapSize.width = 4096; // High-res shadows
+            dirLight.shadow.mapSize.height = 4096;
+            const d = Math.max(data.plot.length, data.plot.width) * 1.5;
+            dirLight.shadow.camera.left = -d;
+            dirLight.shadow.camera.right = d;
+            dirLight.shadow.camera.top = d;
+            dirLight.shadow.camera.bottom = -d;
+            dirLight.shadow.camera.far = 1000;
+            dirLight.shadow.bias = -0.0005;
             scene.add(dirLight);
 
-            // Ground Plot & Grass Landscaping
+            // Procedural PBR Noise/Bump Texture Generator
+            function createNoiseTexture() {{
+                const canvas = document.createElement('canvas');
+                canvas.width = 512; canvas.height = 512;
+                const context = canvas.getContext('2d');
+                const imgData = context.createImageData(512, 512);
+                for (let i = 0; i < imgData.data.length; i += 4) {{
+                    const val = Math.random() * 255;
+                    imgData.data[i] = val; imgData.data[i+1] = val; imgData.data[i+2] = val; imgData.data[i+3] = 255;
+                }}
+                context.putImageData(imgData, 0, 0);
+                const tex = new THREE.CanvasTexture(canvas);
+                tex.wrapS = THREE.RepeatWrapping;
+                tex.wrapT = THREE.RepeatWrapping;
+                return tex;
+            }}
+            const noiseTex = createNoiseTexture();
+
+            // Advanced Contextual Topographic Terrain
             const maxDim = Math.max(data.plot.length, data.plot.width);
-            const groundGeom = new THREE.PlaneGeometry(maxDim * 3, maxDim * 3);
-            const groundMat = new THREE.MeshStandardMaterial({{ color: 0x1b4332, roughness: 0.8 }});
+            const groundGeom = new THREE.PlaneGeometry(maxDim * 6, maxDim * 6, 64, 64);
+            const pos = groundGeom.attributes.position;
+            for(let i=0; i<pos.count; i++) {{
+                const u = pos.getX(i);
+                const v = pos.getY(i);
+                const distToCenter = Math.sqrt(u*u + v*v);
+                // Keep the building plot flat, add rolling hills to the periphery
+                if (distToCenter > maxDim * 0.7) {{
+                    const height = (Math.sin(u * 0.05) * Math.cos(v * 0.05)) * (distToCenter - maxDim * 0.7) * 0.15;
+                    pos.setZ(i, height);
+                }}
+            }}
+            groundGeom.computeVertexNormals();
+            const groundMat = new THREE.MeshStandardMaterial({{ color: 0x1b4332, roughness: 0.9, bumpMap: noiseTex, bumpScale: 0.2 }});
             const groundMesh = new THREE.Mesh(groundGeom, groundMat);
             groundMesh.rotation.x = -Math.PI / 2;
             groundMesh.position.set(data.plot.length / 2, -0.05, data.plot.width / 2);
@@ -470,22 +512,22 @@ class Blueprint3DRenderer:
             // Photorealistic PBR Materials
             materials = {{
                 blueprint_wall: new THREE.MeshStandardMaterial({{ color: 0x1f6feb, roughness: 0.3, metalness: 0.1, transparent: true, opacity: 0.88 }}),
-                blueprint_pillar: new THREE.MeshStandardMaterial({{ color: 0xd32f2f, roughness: 0.2, metalness: 0.3 }}),
-                blueprint_beam: new THREE.MeshStandardMaterial({{ color: 0xf57c00, roughness: 0.3, metalness: 0.2 }}),
+                blueprint_pillar: new THREE.MeshStandardMaterial({{ color: 0xd32f2f, roughness: 0.2, metalness: 0.3, bumpMap: noiseTex, bumpScale: 0.05 }}),
+                blueprint_beam: new THREE.MeshStandardMaterial({{ color: 0xf57c00, roughness: 0.3, metalness: 0.2, bumpMap: noiseTex, bumpScale: 0.05 }}),
                 blueprint_stair: new THREE.MeshStandardMaterial({{ color: 0x00796b, roughness: 0.4 }}),
-                blueprint_door: new THREE.MeshStandardMaterial({{ color: 0x8d6e63, roughness: 0.6 }}),
+                blueprint_door: new THREE.MeshStandardMaterial({{ color: 0x8d6e63, roughness: 0.6, bumpMap: noiseTex, bumpScale: 0.02 }}),
                 blueprint_glass: new THREE.MeshPhysicalMaterial({{ color: 0x80deea, transmission: 0.9, opacity: 1, transparent: true, roughness: 0.1, ior: 1.5 }}),
-                shaded_ext_wall: new THREE.MeshStandardMaterial({{ color: 0xe0e0e0, roughness: 0.4 }}),
-                shaded_int_wall: new THREE.MeshStandardMaterial({{ color: 0xf5f5f5, roughness: 0.6 }}),
-                fixture_mat: new THREE.MeshStandardMaterial({{ color: 0xb0bec5, roughness: 0.5 }}),
+                shaded_ext_wall: new THREE.MeshStandardMaterial({{ color: 0xe0e0e0, roughness: 0.4, bumpMap: noiseTex, bumpScale: 0.08 }}),
+                shaded_int_wall: new THREE.MeshStandardMaterial({{ color: 0xf5f5f5, roughness: 0.6, bumpMap: noiseTex, bumpScale: 0.04 }}),
+                fixture_mat: new THREE.MeshStandardMaterial({{ color: 0xb0bec5, roughness: 0.5, metalness: 0.3 }}),
                 wireframe: new THREE.MeshBasicMaterial({{ color: 0x58a6ff, wireframe: true }}),
-                roof: new THREE.MeshStandardMaterial({{ color: 0x37474f, roughness: 0.6, metalness: 0.2 }}),
+                roof: new THREE.MeshStandardMaterial({{ color: 0x37474f, roughness: 0.6, metalness: 0.2, bumpMap: noiseTex, bumpScale: 0.1 }}),
                 gate_pillar: new THREE.MeshStandardMaterial({{ color: 0xc62828, roughness: 0.4 }}),
                 gate_door: new THREE.MeshStandardMaterial({{ color: 0x263238, roughness: 0.2, metalness: 0.8 }}),
-                garden_lawn: new THREE.MeshStandardMaterial({{ color: 0x2e7d32, roughness: 0.9 }}),
+                garden_lawn: new THREE.MeshStandardMaterial({{ color: 0x2e7d32, roughness: 0.9, bumpMap: noiseTex, bumpScale: 0.15 }}),
                 tree_foliage: new THREE.MeshStandardMaterial({{ color: 0x1b5e20, roughness: 0.7 }}),
-                tree_trunk: new THREE.MeshStandardMaterial({{ color: 0x4e342e, roughness: 0.9 }}),
-                boundary_wall: new THREE.MeshStandardMaterial({{ color: 0x607d8b, roughness: 0.5 }}),
+                tree_trunk: new THREE.MeshStandardMaterial({{ color: 0x4e342e, roughness: 0.9, bumpMap: noiseTex, bumpScale: 0.05 }}),
+                boundary_wall: new THREE.MeshStandardMaterial({{ color: 0x607d8b, roughness: 0.5, bumpMap: noiseTex, bumpScale: 0.1 }}),
                 steel_rod: new THREE.MeshStandardMaterial({{ color: 0xb0bec5, roughness: 0.25, metalness: 0.85 }}),
                 steel_stirrup: new THREE.MeshStandardMaterial({{ color: 0xffb74d, roughness: 0.35, metalness: 0.80 }}),
                 steel_mesh: new THREE.MeshStandardMaterial({{ color: 0x81c784, roughness: 0.4, metalness: 0.70 }}),

@@ -561,20 +561,37 @@ class Blueprint2DRenderer:
     def _draw_title_block(self, ax: plt.Axes, building: BuildingModel, floor: int, theme: Dict[str, str]) -> None:
         """Draws professional architectural title block at bottom of blueprint."""
         meta = LabelingManager.get_title_block_data(building, floor=floor)
-        title_text = (
-            f"PROJECT: BUILD-MATRIX.ai | STYLE: {meta['ARCHITECTURAL_STYLE']} | "
-            f"FLOOR: {meta['FLOOR_LEVEL']} | PLOT: {meta['PLOT_DIMENSIONS']} | BUILT AREA: {meta['TOTAL_BUILT_AREA']} | SCALE: {meta['SCALE']}"
-        )
-        ax.text(
-            building.plot.length / 2,
-            -2.3,
-            title_text,
-            color=theme["text"],
-            fontsize=7.5,
-            ha="center",
-            va="center",
-            bbox=dict(boxstyle="round,pad=0.5", facecolor=theme["title_bg"], edgecolor=theme["dim"], lw=1.0),
-        )
+        
+        # Professional standard A3 Architectural Title Block format
+        block_w = building.plot.length * 0.9
+        block_h = 2.0
+        bx = building.plot.length * 0.05
+        by = -3.5
+        
+        # Main Title Box
+        rect = patches.Rectangle((bx, by), block_w, block_h, facecolor=theme["title_bg"], edgecolor=theme["dim"], lw=1.5, zorder=20)
+        ax.add_patch(rect)
+        
+        # Vertical Separator Lines
+        ax.plot([bx + block_w*0.3, bx + block_w*0.3], [by, by + block_h], color=theme["dim"], lw=1.0, zorder=21)
+        ax.plot([bx + block_w*0.7, bx + block_w*0.7], [by, by + block_h], color=theme["dim"], lw=1.0, zorder=21)
+        
+        # Content Left: Branding & Project
+        ax.text(bx + 0.5, by + 1.4, "Buildmetrics AI", color=theme["door"], fontsize=9, fontweight="black", zorder=22)
+        ax.text(bx + 0.5, by + 0.7, "ARCHITECTURAL BLUEPRINT", color=theme["text"], fontsize=7, fontweight="bold", zorder=22)
+        ax.text(bx + 0.5, by + 0.3, f"STYLE: {meta['ARCHITECTURAL_STYLE']}", color=theme["dim"], fontsize=6, zorder=22)
+
+        # Content Center: Specs
+        ax.text(bx + block_w*0.35, by + 1.4, f"FLOOR LEVEL: {meta['FLOOR_LEVEL']}", color=theme["text"], fontsize=7, fontweight="bold", zorder=22)
+        ax.text(bx + block_w*0.35, by + 0.8, f"PLOT: {meta['PLOT_DIMENSIONS']}", color=theme["dim"], fontsize=6, zorder=22)
+        ax.text(bx + block_w*0.35, by + 0.3, f"BUILT AREA: {meta['TOTAL_BUILT_AREA']}", color=theme["dim"], fontsize=6, zorder=22)
+
+        # Content Right: Meta
+        import datetime
+        date_str = datetime.datetime.now().strftime("%Y-%m-%d")
+        ax.text(bx + block_w*0.75, by + 1.4, f"SCALE: {meta['SCALE']} @ A3", color=theme["text"], fontsize=7, fontweight="bold", zorder=22)
+        ax.text(bx + block_w*0.75, by + 0.8, f"DRAWN BY: Buildmetrics Engine", color=theme["dim"], fontsize=6, zorder=22)
+        ax.text(bx + block_w*0.75, by + 0.3, f"DATE: {date_str}  REV: 01", color=theme["dim"], fontsize=6, zorder=22)
 
     def _draw_boundary_walls(self, ax: plt.Axes, building: BuildingModel, theme: Dict[str, str]) -> None:
         """Draws boundary compound wall around the plot perimeter."""

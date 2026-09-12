@@ -26,6 +26,16 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+import db
+db.init_db()
+
+if 'user_id' not in st.session_state:
+    st.session_state.user_id = None
+if 'username' not in st.session_state:
+    st.session_state.username = None
+if 'chat_history' not in st.session_state:
+    st.session_state.chat_history = []
+
 # Custom Styling
 st.markdown(
     """
@@ -61,15 +71,95 @@ st.markdown(
 )
 
 # Sidebar Configuration
+with st.sidebar.expander("👤 User Authentication", expanded=not st.session_state.user_id):
+    if st.session_state.user_id:
+        st.success(f"Logged in as {st.session_state.username}")
+        if st.button("Logout"):
+            st.session_state.user_id = None
+            st.session_state.username = None
+            st.rerun()
+    else:
+        auth_mode = st.radio("Mode", ["Login", "Sign Up"], horizontal=True)
+        uname = st.text_input("Username")
+        pwd = st.text_input("Password", type="password")
+        if st.button(auth_mode):
+            if auth_mode == "Sign Up":
+                if db.create_user(uname, pwd):
+                    st.success("Account created! Please login.")
+                else:
+                    st.error("Username already exists.")
+            else:
+                uid = db.verify_user(uname, pwd)
+                if uid:
+                    st.session_state.user_id = uid
+                    st.session_state.username = uname
+                    st.rerun()
+                else:
+                    st.error("Invalid credentials.")
+
+if st.session_state.user_id:
+    with st.sidebar.expander("📁 Saved Projects"):
+        proj_name = st.text_input("Project Name")
+        if st.button("💾 Save Current Project"):
+            if proj_name:
+                db.save_project(
+                    st.session_state.user_id, proj_name,
+                    st.session_state.get('plot_length', 20.0),
+                    st.session_state.get('plot_width', 15.0),
+                    st.session_state.get('num_floors', 2),
+                    st.session_state.get('prompt_parsed', {})
+                )
+                st.success("Saved!")
+            else:
+                st.warning("Enter a project name.")
+        
+        saved_projs = db.load_user_projects(st.session_state.user_id)
+        if saved_projs:
+            sel_proj = st.selectbox("Load Project", ["Select..."] + [p["name"] for p in saved_projs])
+            if sel_proj != "Select...":
+                proj_data = next((p for p in saved_projs if p["name"] == sel_proj), None)
+                if proj_data:
+                    st.session_state.prompt_parsed = proj_data["data"]
+                    st.session_state.plot_length = proj_data["l"]
+                    st.session_state.plot_width = proj_data["w"]
+                    st.session_state.num_floors = proj_data["floors"]
+                    st.success("Loaded! Click Generate.")
+
+with st.sidebar.expander("🤖 Agentic Architect Chat", expanded=False):
+    st.caption("Talk to the AI architect to dynamically alter the blueprint.")
+    for msg in st.session_state.chat_history:
+        st.markdown(f"**{msg['role'].capitalize()}**: {msg['content']}")
+    
+    ai_input = st.text_input("Ask AI...", placeholder="e.g., Make plot width 30m and add a pool")
+    if st.button("💬 Send to Architect"):
+        if ai_input:
+            st.session_state.chat_history.append({"role": "user", "content": ai_input})
+            try:
+                import google.generativeai as genai
+                model = genai.GenerativeModel("gemini-2.5-flash")
+                chat_context = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history])
+                sys_prompt = f"You are an AI architect. The user is updating a building layout. Current prompt: '{st.session_state.get('prompt_parsed', {}).get('raw_prompt', '')}'. Respond briefly with the new updated prompt instruction based on their request. Do not explain."
+                response = model.generate_content(f"{sys_prompt}\n\nChat:\n{chat_context}")
+                new_instruction = response.text.strip()
+                st.session_state.chat_history.append({"role": "assistant", "content": f"Understood. I will redesign based on: {new_instruction}"})
+                # Override the manual prompt
+                st.session_state.ai_override_prompt = new_instruction
+                st.rerun()
+            except Exception as e:
+                st.error(f"AI Error: {str(e)}")
+
 st.sidebar.header("🕹️ Building Control Panel")
 
 # 1. Prompt Input
+prompt_val = st.session_state.get("ai_override_prompt", "Modern 2-story villa with living room, master bedroom, 2 guest bedrooms, kitchen, 6 pillars, wide balcony, main gate, and front garden area")
 prompt_input = st.sidebar.text_area(
     "Natural Language Design Prompt",
-    value="Modern 2-story villa with living room, master bedroom, 2 guest bedrooms, kitchen, 6 pillars, wide balcony, main gate, and front garden area",
+    value=prompt_val,
     height=80,
     help="Specify architectural style, room requests, floors, pillars, beams, main gate, garden, or special details.",
 )
+if prompt_input != prompt_val and "ai_override_prompt" in st.session_state:
+    st.session_state.ai_override_prompt = prompt_input # Manual edit overrides AI
 
 # 2. Architectural Style
 style_option = st.sidebar.selectbox(
