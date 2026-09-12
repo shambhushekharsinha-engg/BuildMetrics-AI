@@ -197,6 +197,8 @@ python-dateutil==2.9.0.post0
     # via
     #   matplotlib
     #   pandas
+python-json-logger==4.2.0
+    # via -r requirements.in
 python-multipart==0.0.32
     # via streamlit
 referencing==0.37.0
