@@ -474,22 +474,22 @@ class Blueprint3DRenderer:
             `;
             container.appendChild(uiDiv);
             
-            document.getElementById('xrayToggle').addEventListener('change', (e) => {
+            document.getElementById('xrayToggle').addEventListener('change', (e) => {{
                 const isXray = e.target.checked;
-                scene.traverse((child) => {
-                    if (child.isMesh && child.material && child.material.name !== 'wireframe') {
+                scene.traverse((child) => {{
+                    if (child.isMesh && child.material && child.material.name !== 'wireframe') {{
                         child.material.transparent = true;
                         child.material.opacity = isXray ? 0.3 : 1.0;
                         child.material.needsUpdate = true;
-                    }
-                });
-            });
+                    }}
+                }});
+            }});
             
-            document.getElementById('sunPath').addEventListener('input', (e) => {
+            document.getElementById('sunPath').addEventListener('input', (e) => {{
                 const val = e.target.value / 100; // 0 to 1
                 const angle = val * Math.PI; // Sunrise to sunset
                 sunLight.position.set(Math.cos(angle) * 100, Math.sin(angle) * 100, 20);
-            });
+            }});
 
 
             const controls = new THREE.OrbitControls(camera, renderer.domElement);
