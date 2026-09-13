@@ -337,7 +337,7 @@ total_days = base_days + int(base_days * 0.12)
 cost_usd = building_model.boq_estimate.cost_usd if building_model.boq_estimate else 0
 
 # Compute Compliance
-compliance_issues = sum(1 for a in building_model.annotations if a.category == 'compliance_tag' and 'below' in a.text.lower())
+compliance_issues = sum(1 for a in building_model.annotations if a.category == 'compliance_tag' and a.style_props.get('color') == 'red')
 compliance_str = f"<span style='color:#ff7b72;'>{compliance_issues} Violations</span>" if compliance_issues > 0 else "<span style='color:#3fb950;'>All Checks Passed</span>"
 
 col_m1, col_m2, col_m3, col_m4, col_m5 = st.columns(5)
