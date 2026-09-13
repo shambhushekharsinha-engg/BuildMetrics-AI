@@ -17,6 +17,7 @@ import streamlit.components.v1 as components
 
 from build_matrix.models import ArchitecturalStyle, Blueprint2DConfig, BuildingModel
 from build_matrix.input_handler import InputHandler
+from build_matrix.exporter import ExporterEngine
 
 # Streamlit Page Config
 st.set_page_config(
@@ -655,62 +656,78 @@ with tab_export:
     # 1. 2D PNG Export
     with col_e1:
         st.markdown("#### 🖼️ 2D PNG Image")
-        png_path = os.path.join(temp_dir, "blueprint_2d.png")
-        with st.spinner("Exporting PNG..."):
-            try:
-                resp = requests.post(f"{API_BASE_URL}/api/v1/export", json={"building_id": st.session_state.building_id, "format": "png", "floor": 1}, timeout=15)
-                resp.raise_for_status()
-                st.download_button("Download 2D PNG", resp.content, file_name="BUILD-MATRIX_2D_Blueprint.png", mime="image/png")
-            except Exception as e:
-                st.error(f"Export failed: {e}")
+        if "export_png_data" not in st.session_state: st.session_state.export_png_data = None
+        if st.button("Generate PNG", key="btn_gen_png"):
+            with st.spinner("Exporting PNG..."):
+                try:
+                    resp = requests.post(f"{API_BASE_URL}/api/v1/export", json={"building_id": st.session_state.building_id, "format": "png", "floor": 1}, timeout=15)
+                    resp.raise_for_status()
+                    st.session_state.export_png_data = resp.content
+                except Exception as e: st.error(f"Export failed: {e}")
+        if st.session_state.export_png_data:
+            st.download_button("Download 2D PNG", st.session_state.export_png_data, file_name="BUILD-MATRIX_2D_Blueprint.png", mime="image/png", use_container_width=True)
 
     # 2. 2D SVG Export
     with col_e2:
         st.markdown("#### 📐 2D SVG Vector")
-        svg_path = os.path.join(temp_dir, "blueprint_2d.svg")
-        with st.spinner("Exporting SVG..."):
-            try:
-                resp = requests.post(f"{API_BASE_URL}/api/v1/export", json={"building_id": st.session_state.building_id, "format": "svg", "floor": 1}, timeout=15)
-                resp.raise_for_status()
-                st.download_button("Download 2D SVG", resp.content, file_name="BUILD-MATRIX_2D_Blueprint.svg", mime="image/svg+xml")
-            except Exception as e:
-                st.error(f"Export failed: {e}")
+        if "export_svg_data" not in st.session_state: st.session_state.export_svg_data = None
+        if st.button("Generate SVG", key="btn_gen_svg"):
+            with st.spinner("Exporting SVG..."):
+                try:
+                    resp = requests.post(f"{API_BASE_URL}/api/v1/export", json={"building_id": st.session_state.building_id, "format": "svg", "floor": 1}, timeout=15)
+                    resp.raise_for_status()
+                    st.session_state.export_svg_data = resp.content
+                except Exception as e: st.error(f"Export failed: {e}")
+        if st.session_state.export_svg_data:
+            st.download_button("Download 2D SVG", st.session_state.export_svg_data, file_name="BUILD-MATRIX_2D_Blueprint.svg", mime="image/svg+xml", use_container_width=True)
 
     # 3. 2D PDF Document
     with col_e3:
         st.markdown("#### 📄 2D PDF Plan")
-        pdf_path = os.path.join(temp_dir, "blueprint_2d.pdf")
-        with st.spinner("Exporting PDF..."):
-            try:
-                resp = requests.post(f"{API_BASE_URL}/api/v1/export", json={"building_id": st.session_state.building_id, "format": "pdf", "floor": 1}, timeout=15)
-                resp.raise_for_status()
-                st.download_button("Download 2D PDF", resp.content, file_name="BUILD-MATRIX_2D_Blueprint.pdf", mime="application/pdf")
-            except Exception as e:
-                st.error(f"Export failed: {e}")
+        if "export_pdf_data" not in st.session_state: st.session_state.export_pdf_data = None
+        if st.button("Generate PDF", key="btn_gen_pdf"):
+            with st.spinner("Exporting PDF..."):
+                try:
+                    resp = requests.post(f"{API_BASE_URL}/api/v1/export", json={"building_id": st.session_state.building_id, "format": "pdf", "floor": 1}, timeout=15)
+                    resp.raise_for_status()
+                    st.session_state.export_pdf_data = resp.content
+                except Exception as e: st.error(f"Export failed: {e}")
+        if st.session_state.export_pdf_data:
+            st.download_button("Download 2D PDF", st.session_state.export_pdf_data, file_name="BUILD-MATRIX_2D_Blueprint.pdf", mime="application/pdf", use_container_width=True)
 
     # 4. 3D OBJ Mesh
     with col_e4:
         st.markdown("#### 🧊 3D OBJ Mesh")
-        obj_path = os.path.join(temp_dir, "model_3d.obj")
-        with st.spinner("Exporting OBJ..."):
-            try:
-                resp = requests.post(f"{API_BASE_URL}/api/v1/export", json={"building_id": st.session_state.building_id, "format": "obj"}, timeout=15)
-                resp.raise_for_status()
-                st.download_button("Download 3D OBJ", resp.content, file_name="BUILD-MATRIX_3D_Model.obj", mime="model/obj")
-            except Exception as e:
-                st.error(f"Export failed: {e}")
+        if "export_obj_data" not in st.session_state: st.session_state.export_obj_data = None
+        if st.button("Generate OBJ", key="btn_gen_obj"):
+            with st.spinner("Exporting OBJ..."):
+                try:
+                    resp = requests.post(f"{API_BASE_URL}/api/v1/export", json={"building_id": st.session_state.building_id, "format": "obj"}, timeout=15)
+                    resp.raise_for_status()
+                    st.session_state.export_obj_data = resp.content
+                except Exception as e: st.error(f"Export failed: {e}")
+        if st.session_state.export_obj_data:
+            st.download_button("Download 3D OBJ", st.session_state.export_obj_data, file_name="BUILD-MATRIX_3D_Model.obj", mime="model/obj", use_container_width=True)
 
     st.divider()
 
     col_e5, col_e6 = st.columns(2)
     with col_e5:
         st.markdown("#### 📦 Full Project Package (ZIP)")
-        zip_path = os.path.join(temp_dir, "BUILD-MATRIX_Package.zip")
-        ExporterEngine.export_bundle_zip(building_model, zip_path)
-        with open(zip_path, "rb") as f:
+        if "zip_data" not in st.session_state:
+            st.session_state.zip_data = None
+
+        if st.button("Generate Complete Package", key="btn_gen_zip"):
+            with st.spinner("Bundling ZIP..."):
+                zip_path = os.path.join(temp_dir, "BUILD-MATRIX_Package.zip")
+                ExporterEngine.export_bundle_zip(building_model, zip_path)
+                with open(zip_path, "rb") as f:
+                    st.session_state.zip_data = f.read()
+
+        if st.session_state.zip_data:
             st.download_button(
                 "📦 Download Complete Package (PNG, SVG, PDF, OBJ, STL, HTML)",
-                f,
+                data=st.session_state.zip_data,
                 file_name="BUILD-MATRIX_Complete_Package.zip",
                 mime="application/zip",
                 use_container_width=True,
