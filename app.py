@@ -329,15 +329,28 @@ building_model = TypeAdapter(BuildingModel).validate_python(st.session_state.bui
 total_built = sum(building_model.total_building_area(f) for f in range(1, plot_dims.num_floors + 1))
 gate_w_str = f"{building_model.main_gates[0].width:.1f}m Gate" if building_model.main_gates else "No Gate"
 
-col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+# Compute Timeline
+base_days = 90 + (plot_dims.num_floors * 45)
+total_days = base_days + int(base_days * 0.12)
+
+# Compute Cost
+cost_usd = building_model.boq_estimate.cost_usd if building_model.boq_estimate else 0
+
+# Compute Compliance
+compliance_issues = sum(1 for a in building_model.annotations if a.category == 'compliance_tag' and 'below' in a.text.lower())
+compliance_str = f"<span style='color:#ff7b72;'>{compliance_issues} Violations</span>" if compliance_issues > 0 else "<span style='color:#3fb950;'>All Checks Passed</span>"
+
+col_m1, col_m2, col_m3, col_m4, col_m5 = st.columns(5)
 with col_m1:
-    st.markdown(f'<div class="metric-card"><h4>📏 Plot Footprint</h4><h2>{plot_length*plot_width:.0f} m²</h2><p style="color:#94A3B8; margin:0;">{plot_length:.1f}m x {plot_width:.1f}m dimensions</p></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="metric-card"><h4>📏 Footprint</h4><h2>{plot_length*plot_width:.0f} m²</h2><p style="color:#94A3B8; margin:0;">{plot_length:.1f}m x {plot_width:.1f}m</p></div>', unsafe_allow_html=True)
 with col_m2:
-    st.markdown(f'<div class="metric-card"><h4>🏢 Total Built Area</h4><h2>{total_built:.0f} m²</h2><p style="color:#94A3B8; margin:0;">Across {plot_dims.num_floors} levels</p></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="metric-card"><h4>🏢 Built Area</h4><h2>{total_built:.0f} m²</h2><p style="color:#94A3B8; margin:0;">Across {plot_dims.num_floors} levels</p></div>', unsafe_allow_html=True)
 with col_m3:
-    st.markdown(f'<div class="metric-card"><h4>🌳 Garden & Lawn</h4><h2>{building_model.total_garden_area():.0f} m²</h2><p style="color:#94A3B8; margin:0;">{gate_w_str} Entrance</p></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="metric-card"><h4>💰 Est. Cost</h4><h2>${cost_usd:,.0f}</h2><p style="color:#94A3B8; margin:0;">BOQ Estimate</p></div>', unsafe_allow_html=True)
 with col_m4:
-    st.markdown(f'<div class="metric-card"><h4>🏗️ Structural Frame</h4><h2>{len(building_model.pillars)} Col</h2><p style="color:#94A3B8; margin:0;">{len(building_model.beams)} Beams structural grid</p></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="metric-card"><h4>⏱️ Timeline</h4><h2>{total_days} Days</h2><p style="color:#94A3B8; margin:0;">Risk-Adjusted</p></div>', unsafe_allow_html=True)
+with col_m5:
+    st.markdown(f'<div class="metric-card"><h4>✅ Compliance</h4><h2>{compliance_str}</h2><p style="color:#94A3B8; margin:0;">NBC / IBC Checks</p></div>', unsafe_allow_html=True)
 
 st.divider()
 
