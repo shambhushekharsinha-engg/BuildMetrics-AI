@@ -298,14 +298,21 @@ class Blueprint3DRenderer:
     def generate_threejs_html(self, render_mode: str = "Blueprint") -> str:
         """Generates a complete standalone interactive Three.js 3D WebGL viewer with Orbit Controls and 3D annotations."""
         plot = self.building.plot
+
+        cost_per_m2 = 0
+        if hasattr(self.building, "boq_estimate") and self.building.boq_estimate:
+            total_area = sum(r.area for r in self.building.rooms)
+            if total_area > 0:
+                cost_per_m2 = self.building.boq_estimate.cost_usd / total_area
+
         scene_data = {
-            "plot": {"length": plot.length, "width": plot.width, "height": plot.max_height, "floors": plot.num_floors, "floor_h": plot.floor_height},
-            "rooms": [{"name": r.name, "x": r.x, "y": r.y, "w": r.width, "h": r.height, "floor": r.floor, "color": r.color} for r in self.building.rooms],
+            "plot": {"length": plot.length, "width": plot.width, "height": plot.max_height, "floors": plot.num_floors, "floor_h": plot.floor_height, "cost_per_m2": cost_per_m2},
+            "rooms": [{"id": f"room_{i}", "name": r.name, "x": r.x, "y": r.y, "w": r.width, "h": r.height, "floor": r.floor, "color": r.color, "area": r.area, "est_cost": round(r.area * cost_per_m2)} for i, r in enumerate(self.building.rooms)],
             "walls": [{"x1": w.x1, "y1": w.y1, "x2": w.x2, "y2": w.y2, "ext": w.is_exterior, "floor": w.floor} for w in self.building.walls],
             "boundary_walls": [{"x1": w.x1, "y1": w.y1, "x2": w.x2, "y2": w.y2} for w in getattr(self.building, "boundary_walls", [])],
             "main_gates": [{"id": g.id, "x": g.x, "y": g.y, "w": g.width, "type": g.gate_type, "pw": g.pillar_width, "h": g.height} for g in getattr(self.building, "main_gates", [])],
             "gardens": [{"id": g.id, "name": g.name, "x": g.x, "y": g.y, "w": g.width, "h": g.height, "trees": g.tree_count} for g in getattr(self.building, "gardens", [])],
-            "pillars": [{"id": p.id, "x": p.x, "y": p.y, "w": p.width, "h": p.height, "shape": p.shape, "floor": p.floor} for p in self.building.pillars],
+            "pillars": [{"id": p.id, "x": p.x, "y": p.y, "w": p.width, "h": p.height, "shape": p.shape, "floor": p.floor, "load_cap": round(600.0 * p.floor + (plot.num_floors - p.floor + 1) * 350.0, 1)} for p in self.building.pillars],
             "beams": [{"id": b.id, "x1": b.x1, "y1": b.y1, "x2": b.x2, "y2": b.y2, "w": b.width, "d": b.depth, "floor": b.floor} for b in self.building.beams],
             "doors": [{"id": d.id, "x": d.x, "y": d.y, "w": d.width, "orient": d.orientation, "type": getattr(d, "door_type", "single"), "floor": d.floor} for d in self.building.doors],
             "windows": [{"id": w.id, "x": w.x, "y": w.y, "w": w.width, "orient": w.orientation, "floor": w.floor} for w in self.building.windows],
@@ -396,8 +403,9 @@ class Blueprint3DRenderer:
         <div class="legend-item"><div class="legend-color" style="background:#2e7d32;"></div> Garden Lawn & Trees</div>
     </div>
 
+    
     <div id="canvas-container"></div>
-
+    <div id="tooltip" style="display:none; position:absolute; background:rgba(13,17,23,0.95); padding:12px; border:1px solid #58a6ff; border-radius:6px; color:#c9d1d9; font-size:13px; pointer-events:none; z-index:200; box-shadow:0 4px 12px rgba(0,0,0,0.8);"></div>
     <script>
         const data = {json_str};
         
@@ -594,7 +602,53 @@ class Blueprint3DRenderer:
             scene.add(boundaryGroup);
             scene.add(rebarGroup);
 
+
             window.addEventListener('resize', onWindowResize);
+            
+            // --- RAYCASTER FOR TRACEABILITY ---
+            const raycaster = new THREE.Raycaster();
+            const mouse = new THREE.Vector2();
+            const tooltip = document.getElementById('tooltip');
+            
+            window.addEventListener('pointerdown', (e) => {{
+                if (e.target.tagName === 'BUTTON' || e.target.tagName === 'INPUT' || e.target.closest('#ui-panel')) return;
+                
+                mouse.x = (e.clientX / window.innerWidth) * 2 - 1;
+                mouse.y = -(e.clientY / window.innerHeight) * 2 + 1;
+                raycaster.setFromCamera(mouse, camera);
+                
+                const intersects = raycaster.intersectObjects(buildingGroup.children);
+                let found = null;
+                for (let i = 0; i < intersects.length; i++) {{
+                    if (intersects[i].object.userData && intersects[i].object.userData.type) {{
+                        found = intersects[i].object;
+                        break;
+                    }}
+                }}
+                
+                if (found) {{
+                    const ud = found.userData;
+                    let html = `<b style="color:#58a6ff;">${{ud.type}}</b><br/>`;
+                    if (ud.type === 'Room') {{
+                        html += `<b>${{ud.name.toUpperCase()}}</b> (Floor ${{ud.floor}})<br/>`;
+                        html += `Area: ${{ud.area.toFixed(1)}} m²<br/>`;
+                        html += `Est. Cost: <span style="color:#3fb950;">$${{ud.est_cost.toLocaleString()}}</span>`;
+                    }} else if (ud.type === 'Structural Column') {{
+                        html += `ID: ${{ud.id}} (Floor ${{ud.floor}})<br/>`;
+                        html += `Max Load Capacity: <span style="color:#ff7b72;">${{ud.load_cap}} kN</span>`;
+                    }} else if (ud.type === 'Structural Beam') {{
+                        html += `ID: ${{ud.id}} (Floor ${{ud.floor}})<br/>`;
+                        html += `Span: ${{ud.span}} m`;
+                    }}
+                    tooltip.innerHTML = html;
+                    tooltip.style.display = 'block';
+                    tooltip.style.left = (e.clientX + 15) + 'px';
+                    tooltip.style.top = (e.clientY + 15) + 'px';
+                }} else {{
+                    tooltip.style.display = 'none';
+                }}
+            }});
+
             animate();
         }}
 
@@ -610,6 +664,21 @@ class Blueprint3DRenderer:
             const wallThick = 0.25;
             const floorH = data.plot.floor_h;
 
+
+            // 0. Rooms (Floor Plates for Raycasting)
+            data.rooms.forEach((r) => {{
+                const geom = new THREE.BoxGeometry(r.w, Math.max(r.h, 0.1), 0.05);
+                const mat = new THREE.MeshBasicMaterial({{ color: 0x1f6feb, transparent: true, opacity: 0.1, depthWrite: false }});
+                const mesh = new THREE.Mesh(geom, mat);
+                const midX = r.x + r.w / 2;
+                const midZ = r.y + r.h / 2;
+                const midY = (r.floor - 1) * floorH + 0.025;
+                mesh.position.set(midX, midY, midZ);
+                mesh.rotation.x = -Math.PI / 2;
+                mesh.userData = {{ type: 'Room', name: r.name, floor: r.floor, area: r.area, est_cost: r.est_cost }};
+                buildingGroup.add(mesh);
+            }});
+            
             // 1. Walls
             data.walls.forEach((w) => {{
                 const dx = w.x2 - w.x1;
@@ -628,6 +697,7 @@ class Blueprint3DRenderer:
 
                 mesh.position.set(midX, midY, midZ);
                 mesh.rotation.y = -angle;
+                mesh.userData = {{ type: "Structural Beam", id: b.id, floor: b.floor, span: span.toFixed(2) }};
                 mesh.castShadow = true;
                 mesh.receiveShadow = true;
                 buildingGroup.add(mesh);
@@ -642,6 +712,7 @@ class Blueprint3DRenderer:
                 const midY = (p.floor - 1) * floorH + pillarH / 2;
                 mesh.position.set(p.x, midY, p.y);
                 mesh.castShadow = true;
+                mesh.userData = {{ type: "Structural Column", id: p.id, floor: p.floor, load_cap: p.load_cap }};
                 buildingGroup.add(mesh);
             }});
 
@@ -663,6 +734,7 @@ class Blueprint3DRenderer:
 
                 mesh.position.set(midX, midY, midZ);
                 mesh.rotation.y = -angle;
+                mesh.userData = {{ type: "Structural Beam", id: b.id, floor: b.floor, span: span.toFixed(2) }};
                 buildingGroup.add(mesh);
             }});
 
