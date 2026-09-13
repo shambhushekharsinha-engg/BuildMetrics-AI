@@ -34,6 +34,10 @@ jobs:
           mypy build_matrix/schemas.py api.py
         continue-on-error: true
 
+      - name: Compile-check all Python files
+        run: |
+          python -m compileall -q .
+
       - name: Test with pytest
         env:
           GEMINI_API_KEY: "dummy_key_for_tests"

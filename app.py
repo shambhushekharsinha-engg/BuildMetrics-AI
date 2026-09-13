@@ -127,7 +127,8 @@ if st.session_state.user_id:
                     st.session_state.prompt_parsed = proj_data["data"]
                     st.session_state.plot_length = proj_data["l"]
                     st.session_state.plot_width = proj_data["w"]
-                    st.session_state.num_floors = proj_data["floors"]\n                    st.session_state.force_generate = True
+                    st.session_state.num_floors = proj_data["floors"]
+                    st.session_state.force_generate = True
                     st.success("Loaded! Click Generate.")
 
 with st.sidebar.expander("🤖 Agentic Architect Chat", expanded=False):
@@ -148,7 +149,8 @@ with st.sidebar.expander("🤖 Agentic Architect Chat", expanded=False):
                 new_instruction = response.text.strip()
                 st.session_state.chat_history.append({"role": "assistant", "content": f"Understood. I will redesign based on: {new_instruction}"})
                 # Override the manual prompt
-                st.session_state.ai_override_prompt = new_instruction\n                st.session_state.force_generate = True
+                st.session_state.ai_override_prompt = new_instruction
+                st.session_state.force_generate = True
                 st.rerun()
             except Exception as e:
                 st.error(f"AI Error: {str(e)}")
