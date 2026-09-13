@@ -10,10 +10,7 @@ import json
 from typing import Dict, List, Tuple, Any
 from .models import PlotDimensions, ArchitecturalStyle
 
-try:
-    import google.generativeai as genai
-except ImportError:
-    genai = None
+
 
 
 
@@ -65,8 +62,9 @@ class InputHandler:
     def parse_prompt(cls, prompt: str) -> Dict[str, Any]:
         """Extract architectural constraints using LLM, or fallback to regex."""
         api_key = os.environ.get("GEMINI_API_KEY")
-        if genai and api_key:
+        if api_key:
             try:
+                import google.generativeai as genai
                 genai.configure(api_key=api_key)
                 model = genai.GenerativeModel("gemini-2.5-flash")
                 system_prompt = f'''
