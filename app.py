@@ -145,13 +145,9 @@ with st.sidebar.expander("🤖 Agentic Architect Chat", expanded=False):
             try:
                 import google.generativeai as genai
                 model = genai.GenerativeModel("gemini-2.5-flash")
-                chat_context = "
-".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history])
+                chat_context = "\\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history])
                 sys_prompt = f"You are an AI architect. The user is updating a building layout. Current prompt: '{st.session_state.get('prompt_parsed', {}).get('raw_prompt', '')}'. Respond briefly with the new updated prompt instruction based on their request. Do not explain."
-                response = model.generate_content(f"{sys_prompt}
-
-Chat:
-{chat_context}")
+                response = model.generate_content(f"{sys_prompt}\\n\\nChat:\\n{chat_context}")
                 new_instruction = response.text.strip()
                 st.session_state.chat_history.append({"role": "assistant", "content": f"Understood. I will redesign based on: {new_instruction}..."})
                 
