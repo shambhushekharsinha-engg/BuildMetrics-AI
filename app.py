@@ -141,14 +141,46 @@ with st.sidebar.expander("🤖 Agentic Architect Chat", expanded=False):
     if st.button("💬 Send to Architect"):
         if ai_input:
             st.session_state.chat_history.append({"role": "user", "content": ai_input})
+
             try:
                 import google.generativeai as genai
                 model = genai.GenerativeModel("gemini-2.5-flash")
-                chat_context = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history])
+                chat_context = "
+".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history])
                 sys_prompt = f"You are an AI architect. The user is updating a building layout. Current prompt: '{st.session_state.get('prompt_parsed', {}).get('raw_prompt', '')}'. Respond briefly with the new updated prompt instruction based on their request. Do not explain."
-                response = model.generate_content(f"{sys_prompt}\n\nChat:\n{chat_context}")
+                response = model.generate_content(f"{sys_prompt}
+
+Chat:
+{chat_context}")
                 new_instruction = response.text.strip()
-                st.session_state.chat_history.append({"role": "assistant", "content": f"Understood. I will redesign based on: {new_instruction}"})
+                st.session_state.chat_history.append({"role": "assistant", "content": f"Understood. I will redesign based on: {new_instruction}..."})
+                
+                # Capture snapshot before regeneration
+                if "building_model_cache" in st.session_state:
+                    from pydantic import TypeAdapter
+                    from build_matrix.models import BuildingModel
+                    from collections import Counter
+                    prev_model = TypeAdapter(BuildingModel).validate_python(st.session_state.building_model_cache)
+                    cost_usd = prev_model.boq_estimate.cost_usd if prev_model.boq_estimate else 0
+                    total_built = sum(prev_model.total_building_area(f) for f in range(1, prev_model.plot.num_floors + 1))
+                    base_days = 90 + (prev_model.plot.num_floors * 45)
+                    total_days = base_days + int(base_days * 0.12)
+                    compliance_issues = sum(1 for a in prev_model.annotations if a.category == 'compliance_tag' and a.style_props.get('color') == 'red')
+                    
+                    room_counts = Counter((r.room_type.lower(), r.floor) for r in prev_model.rooms)
+                    room_areas = {(r.room_type.lower(), r.floor): r.area for r in prev_model.rooms}
+                    
+                    st.session_state.pre_gen_snapshot = {
+                        "cost": cost_usd,
+                        "area": total_built,
+                        "days": total_days,
+                        "compliance": compliance_issues,
+                        "room_counts": dict(room_counts),
+                        "room_areas": room_areas,
+                        "new_instruction": new_instruction
+                    }
+                    st.session_state.pending_ai_diff = True
+                
                 # Override the manual prompt
                 st.session_state.ai_override_prompt = new_instruction
                 st.session_state.force_generate = True
@@ -336,9 +368,55 @@ total_days = base_days + int(base_days * 0.12)
 # Compute Cost
 cost_usd = building_model.boq_estimate.cost_usd if building_model.boq_estimate else 0
 
+
 # Compute Compliance
 compliance_issues = sum(1 for a in building_model.annotations if a.category == 'compliance_tag' and a.style_props.get('color') == 'red')
 compliance_str = f"<span style='color:#ff7b72;'>{compliance_issues} Violations</span>" if compliance_issues > 0 else "<span style='color:#3fb950;'>All Checks Passed</span>"
+
+# Apply AI Diff Update
+if st.session_state.get("pending_ai_diff") and "pre_gen_snapshot" in st.session_state:
+    prev = st.session_state.pre_gen_snapshot
+    if prev:
+        cost_diff = cost_usd - prev["cost"]
+        cost_diff_str = f"+${cost_diff:,.0f}" if cost_diff > 0 else f"-${abs(cost_diff):,.0f}" if cost_diff < 0 else "no change"
+        
+        days_diff = total_days - prev["days"]
+        days_diff_str = f"+{days_diff} days" if days_diff > 0 else f"{days_diff} days" if days_diff < 0 else "no change"
+
+        from collections import Counter
+        curr_room_counts = Counter((r.room_type.lower(), r.floor) for r in building_model.rooms)
+        curr_room_areas = {(r.room_type.lower(), r.floor): r.area for r in building_model.rooms}
+        
+        room_msgs = []
+        all_keys = set(prev["room_counts"].keys()) | set(curr_room_counts.keys())
+        for k in sorted(list(all_keys), key=lambda x: (x[1], x[0])):
+            rtype, floor = k
+            p_count = prev["room_counts"].get(k, 0)
+            c_count = curr_room_counts.get(k, 0)
+            if c_count > p_count:
+                room_msgs.append(f"+{c_count - p_count} {rtype.title()} (Floor {floor})")
+            elif c_count < p_count:
+                room_msgs.append(f"−{p_count - c_count} {rtype.title()} (Floor {floor})")
+            elif c_count == 1 and p_count == 1:
+                p_area = prev["room_areas"][k]
+                c_area = curr_room_areas[k]
+                if abs(p_area - c_area) > 0.5:
+                    room_msgs.append(f"{rtype.title()} (Floor {floor}): {p_area:.1f} m² → {c_area:.1f} m²")
+        
+        room_str = "\n".join(f"- {msg}" for msg in room_msgs) if room_msgs else "- No room changes"
+        
+        diff_msg = f"**Redesigned based on:** {prev['new_instruction']}\n\n"
+        diff_msg += f"**Changes:**\n{room_str}\n\n"
+        diff_msg += f"**Impact:**\n"
+        diff_msg += f"- **Cost**: ${prev['cost']:,.0f} → ${cost_usd:,.0f} ({cost_diff_str})\n"
+        diff_msg += f"- **Timeline**: {prev['days']} → {total_days} days ({days_diff_str})\n"
+        diff_msg += f"- **Compliance**: {compliance_issues} violations"
+        
+        st.session_state.chat_history[-1] = {"role": "assistant", "content": diff_msg}
+    
+    st.session_state.pending_ai_diff = False
+    st.session_state.pre_gen_snapshot = None
+
 
 col_m1, col_m2, col_m3, col_m4, col_m5 = st.columns(5)
 with col_m1:
