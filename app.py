@@ -399,14 +399,17 @@ if st.session_state.get("pending_ai_diff") and "pre_gen_snapshot" in st.session_
                 if abs(p_area - c_area) > 0.5:
                     room_msgs.append(f"{rtype.title()} (Floor {floor}): {p_area:.1f} m² → {c_area:.1f} m²")
         
-        room_str = "\n".join(f"- {msg}" for msg in room_msgs) if room_msgs else "- No room changes"
+        room_str = "\\n".join(f"- {msg}" for msg in room_msgs) if room_msgs else "- No room changes"
         
-        diff_msg = f"**Redesigned based on:** {prev['new_instruction']}\n\n"
-        diff_msg += f"**Changes:**\n{room_str}\n\n"
-        diff_msg += f"**Impact:**\n"
-        diff_msg += f"- **Cost**: ${prev['cost']:,.0f} → ${cost_usd:,.0f} ({cost_diff_str})\n"
-        diff_msg += f"- **Timeline**: {prev['days']} → {total_days} days ({days_diff_str})\n"
-        diff_msg += f"- **Compliance**: {compliance_issues} violations"
+        comp_diff = compliance_issues - prev["compliance"]
+        comp_diff_str = f"+{comp_diff}" if comp_diff > 0 else f"{comp_diff}" if comp_diff < 0 else "no change"
+        
+        diff_msg = f"**Redesigned based on:** {prev['new_instruction']}\\n\\n"
+        diff_msg += f"**Changes:**\\n{room_str}\\n\\n"
+        diff_msg += f"**Impact:**\\n"
+        diff_msg += f"- **Cost**: ${prev['cost']:,.0f} → ${cost_usd:,.0f} ({cost_diff_str})\\n"
+        diff_msg += f"- **Timeline**: {prev['days']} → {total_days} days ({days_diff_str})\\n"
+        diff_msg += f"- **Compliance**: {prev['compliance']} → {compliance_issues} violations ({comp_diff_str})"
         
         st.session_state.chat_history[-1] = {"role": "assistant", "content": diff_msg}
     
