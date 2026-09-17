@@ -499,15 +499,20 @@ Return ONLY valid JSON.
             r_name = leaf.room.get("name", "Room")
             color = self.ROOM_COLOR_PALETTE.get(r_type, "#F5F5F5")
             
+            x_start = round(rx, 2)
+            y_start = round(ry, 2)
+            x_end = round(rx + rw, 2)
+            y_end = round(ry + rh, 2)
+            
             rooms.append(
                 RoomSpec(
                     id=f"F{floor}_R{len(rooms)+1}",
                     name=r_name,
                     room_type=r_type,
-                    x=round(rx, 2),
-                    y=round(ry, 2),
-                    width=round(rw, 2),
-                    height=round(rh, 2),
+                    x=x_start,
+                    y=y_start,
+                    width=round(x_end - x_start, 2),
+                    height=round(y_end - y_start, 2),
                     floor=floor,
                     color=color,
                 )
