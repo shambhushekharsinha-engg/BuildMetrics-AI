@@ -79,12 +79,12 @@ Recorded here so future contributors know why this phase's history has extra scr
 
 ## Phase 8 — 2D Floor Plan Rendering Quality
 
-- [ ] **Line-weight hierarchy** in `Blueprint2DRenderer`:
+- [x] **Line-weight hierarchy** in `Blueprint2DRenderer`:
   - Walls/structural elements: heaviest weight (~2.5–3pt), drawn as cut-in-section
   - Doors/windows/openings: medium weight (~1.5pt), doors with proper swing arcs
   - Dimension lines, grid, annotations: thin (~0.5–0.75pt), offset from walls, never overlapping geometry
   - Furniture/fixtures: thin, lighter tone or dashed, visually distinct from structural elements
-- [ ] **Layout engine upgrade**: move `LayoutEngine` from fixed templates toward a constraint-satisfaction or simulated-annealing approach:
+- [x] **Layout engine upgrade**: move `LayoutEngine` from fixed templates toward a constraint-satisfaction or simulated-annealing approach:
   - Hard constraints: minimum room size, egress path to an exit, plumbing stack alignment between floors, structural grid alignment
   - Soft objectives: daylight exposure, room adjacency preferences (kitchen near dining, bedrooms away from entry)
 - [x] **Code-compliance checks surfaced in the drawing**: implemented as a `CodeProfile` abstraction (`NBC_INDIA_2016` default, `IBC_2021` alternate) with real geometry-driven checks for habitable room area/width, door egress width, and stair riser/tread — rendered as colored advisory overlays (not a certification claim) directly on the 2D blueprint. Verified live: generated a real building and confirmed a stair check genuinely failed against real computed riser/tread values (commit `e38101d`).

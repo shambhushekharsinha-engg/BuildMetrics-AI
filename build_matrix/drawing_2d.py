@@ -160,7 +160,7 @@ class Blueprint2DRenderer:
             (0, 0),
             plot.length,
             plot.width,
-            linewidth=1.5,
+            linewidth=0.75,
             edgecolor=theme["dim"],
             facecolor="none",
             linestyle="--",
@@ -205,7 +205,7 @@ class Blueprint2DRenderer:
         # 4. Draw Walls (With Hatching & Cutouts)
         floor_walls = [w for w in building.walls if w.floor == floor]
         for wall in floor_walls:
-            lw = 3.0 if wall.is_exterior else 2.0
+            lw = 3.0 if wall.is_exterior else 2.5
             color = theme["wall_ext"] if wall.is_exterior else theme["wall_int"]
             ax.plot([wall.x1, wall.x2], [wall.y1, wall.y2], color=color, linewidth=lw, solid_capstyle="butt", zorder=3)
             # Exterior Wall Hatching
@@ -249,9 +249,7 @@ class Blueprint2DRenderer:
                 ax.plot(
                     [beam.x1, beam.x2],
                     [beam.y1, beam.y2],
-                    color=theme["beam"],
-                    linestyle="--",
-                    linewidth=1.5,
+                    color=theme["beam"], linestyle="--", linewidth=2.5,
                     alpha=0.8,
                     zorder=4,
                 )
@@ -407,43 +405,43 @@ class Blueprint2DRenderer:
 
         if ftype == "toilet":
             # Tank rectangle + Bowl oval
-            tank = patches.Rectangle((fx - fw / 2, fy + fh / 2 - 0.2), fw, 0.2, facecolor="none", edgecolor=col, linewidth=1.0, zorder=4)
-            bowl = patches.Ellipse((fx, fy - 0.1), fw * 0.9, fh * 0.7, facecolor="none", edgecolor=col, linewidth=1.0, zorder=4)
+            tank = patches.Rectangle((fx - fw / 2, fy + fh / 2 - 0.2), fw, 0.2, facecolor="none", edgecolor=col, linewidth=0.5, linestyle=":", zorder=4)
+            bowl = patches.Ellipse((fx, fy - 0.1), fw * 0.9, fh * 0.7, facecolor="none", edgecolor=col, linewidth=0.5, linestyle=":", zorder=4)
             ax.add_patch(tank)
             ax.add_patch(bowl)
 
         elif ftype == "sink":
             # Counter rect + inner basin oval
-            rect = patches.Rectangle((fx - fw / 2, fy - fh / 2), fw, fh, facecolor="none", edgecolor=col, linewidth=1.0, zorder=4)
+            rect = patches.Rectangle((fx - fw / 2, fy - fh / 2), fw, fh, facecolor="none", edgecolor=col, linewidth=0.5, linestyle=":", zorder=4)
             basin = patches.Ellipse((fx, fy), fw * 0.7, fh * 0.7, facecolor="none", edgecolor=col, linewidth=0.8, zorder=4)
             ax.add_patch(rect)
             ax.add_patch(basin)
 
         elif ftype == "shower":
             # Shower enclosure box with diagonal cross
-            box = patches.Rectangle((fx - fw / 2, fy - fh / 2), fw, fh, facecolor="none", edgecolor=col, linewidth=1.0, zorder=4)
+            box = patches.Rectangle((fx - fw / 2, fy - fh / 2), fw, fh, facecolor="none", edgecolor=col, linewidth=0.5, linestyle=":", zorder=4)
             ax.add_patch(box)
             ax.plot([fx - fw / 2, fx + fw / 2], [fy - fh / 2, fy + fh / 2], color=col, linewidth=0.5, linestyle=":", zorder=4)
-            circle = patches.Circle((fx, fy), radius=0.1, facecolor="none", edgecolor=col, lw=0.8, zorder=4)
+            circle = patches.Circle((fx, fy), radius=0.1, facecolor="none", edgecolor=col, lw=0.5, linestyle=":", zorder=4)
             ax.add_patch(circle)
 
         elif ftype == "kitchen_counter":
-            counter = patches.Rectangle((fx - fw / 2, fy - fh / 2), fw, fh, facecolor="none", edgecolor=col, linewidth=1.2, zorder=4)
+            counter = patches.Rectangle((fx - fw / 2, fy - fh / 2), fw, fh, facecolor="none", edgecolor=col, linewidth=0.5, linestyle=":", zorder=4)
             ax.add_patch(counter)
 
         elif ftype == "stove":
-            box = patches.Rectangle((fx - fw / 2, fy - fh / 2), fw, fh, facecolor="none", edgecolor=col, linewidth=1.0, zorder=4)
+            box = patches.Rectangle((fx - fw / 2, fy - fh / 2), fw, fh, facecolor="none", edgecolor=col, linewidth=0.5, linestyle=":", zorder=4)
             ax.add_patch(box)
             # 4 Burners
             r_b = min(fw, fh) * 0.18
             for dx in [-fw * 0.25, fw * 0.25]:
                 for dy in [-fh * 0.25, fh * 0.25]:
-                    burner = patches.Circle((fx + dx, fy + dy), radius=r_b, facecolor="none", edgecolor=col, lw=0.8, zorder=4)
+                    burner = patches.Circle((fx + dx, fy + dy), radius=r_b, facecolor="none", edgecolor=col, lw=0.5, linestyle=":", zorder=4)
                     ax.add_patch(burner)
 
         elif ftype == "bed":
             # Frame rect + Pillows + Blanket fold
-            frame = patches.Rectangle((fx - fw / 2, fy - fh / 2), fw, fh, facecolor="none", edgecolor=col, linewidth=1.2, zorder=4)
+            frame = patches.Rectangle((fx - fw / 2, fy - fh / 2), fw, fh, facecolor="none", edgecolor=col, linewidth=0.5, linestyle=":", zorder=4)
             ax.add_patch(frame)
             # Pillows
             p1 = patches.Rectangle((fx - fw * 0.45, fy + fh * 0.25), fw * 0.4, fh * 0.2, facecolor="none", edgecolor=col, linewidth=0.8, zorder=4)
@@ -454,25 +452,25 @@ class Blueprint2DRenderer:
             ax.plot([fx - fw / 2, fx + fw / 2], [fy - fh * 0.1, fy - fh * 0.1], color=col, linewidth=0.8, linestyle="--", zorder=4)
 
         elif ftype == "wardrobe":
-            ward = patches.Rectangle((fx - fw / 2, fy - fh / 2), fw, fh, facecolor="none", edgecolor=col, linewidth=1.0, zorder=4)
+            ward = patches.Rectangle((fx - fw / 2, fy - fh / 2), fw, fh, facecolor="none", edgecolor=col, linewidth=0.5, linestyle=":", zorder=4)
             ax.add_patch(ward)
             ax.plot([fx - fw / 2, fx + fw / 2], [fy - fh / 2, fy + fh / 2], color=col, linewidth=0.5, linestyle=":", zorder=4)
 
         elif ftype == "sofa":
             # Couch backrest + seat cushion
-            sofa = patches.Rectangle((fx - fw / 2, fy - fh / 2), fw, fh, facecolor="none", edgecolor=col, linewidth=1.2, zorder=4)
+            sofa = patches.Rectangle((fx - fw / 2, fy - fh / 2), fw, fh, facecolor="none", edgecolor=col, linewidth=0.5, linestyle=":", zorder=4)
             back = patches.Rectangle((fx - fw / 2, fy + fh / 2 - 0.2), fw, 0.2, facecolor="none", edgecolor=col, linewidth=0.8, zorder=4)
             ax.add_patch(sofa)
             ax.add_patch(back)
 
         elif ftype == "dining_table":
-            tbl = patches.Rectangle((fx - fw / 2, fy - fh / 2), fw, fh, facecolor="none", edgecolor=col, linewidth=1.2, zorder=4)
+            tbl = patches.Rectangle((fx - fw / 2, fy - fh / 2), fw, fh, facecolor="none", edgecolor=col, linewidth=0.5, linestyle=":", zorder=4)
             ax.add_patch(tbl)
             # Chairs around table
             c_w, c_h = 0.4, 0.4
             for cx in [fx - fw * 0.3, fx, fx + fw * 0.3]:
-                c_top = patches.Rectangle((cx - c_w / 2, fy + fh / 2 + 0.05), c_w, c_h, facecolor="none", edgecolor=col, lw=0.8, zorder=4)
-                c_bot = patches.Rectangle((cx - c_w / 2, fy - fh / 2 - c_h - 0.05), c_w, c_h, facecolor="none", edgecolor=col, lw=0.8, zorder=4)
+                c_top = patches.Rectangle((cx - c_w / 2, fy + fh / 2 + 0.05), c_w, c_h, facecolor="none", edgecolor=col, lw=0.5, linestyle=":", zorder=4)
+                c_bot = patches.Rectangle((cx - c_w / 2, fy - fh / 2 - c_h - 0.05), c_w, c_h, facecolor="none", edgecolor=col, lw=0.5, linestyle=":", zorder=4)
                 ax.add_patch(c_top)
                 ax.add_patch(c_bot)
 
@@ -489,29 +487,29 @@ class Blueprint2DRenderer:
             if dtype == "double":
                 # Double Entrance Door (two leaves, two 90° arcs)
                 half_w = dw / 2
-                ax.plot([dx - dw / 2, dx - dw / 2], [dy, dy + half_w * swing], color=theme["door"], linewidth=1.8, zorder=7)
-                ax.plot([dx + dw / 2, dx + dw / 2], [dy, dy + half_w * swing], color=theme["door"], linewidth=1.8, zorder=7)
-                arc1 = patches.Arc((dx - dw / 2, dy), width=2 * half_w, height=2 * half_w, angle=0, theta1=0 if swing > 0 else 270, theta2=90 if swing > 0 else 360, color=theme["door"], linestyle=":", linewidth=1.0, zorder=7)
-                arc2 = patches.Arc((dx + dw / 2, dy), width=2 * half_w, height=2 * half_w, angle=0, theta1=90 if swing > 0 else 180, theta2=180 if swing > 0 else 270, color=theme["door"], linestyle=":", linewidth=1.0, zorder=7)
+                ax.plot([dx - dw / 2, dx - dw / 2], [dy, dy + half_w * swing], color=theme["door"], linewidth=1.5, zorder=7)
+                ax.plot([dx + dw / 2, dx + dw / 2], [dy, dy + half_w * swing], color=theme["door"], linewidth=1.5, zorder=7)
+                arc1 = patches.Arc((dx - dw / 2, dy), width=2 * half_w, height=2 * half_w, angle=0, theta1=0 if swing > 0 else 270, theta2=90 if swing > 0 else 360, color=theme["door"], linestyle=":", linewidth=0.5, zorder=7)
+                arc2 = patches.Arc((dx + dw / 2, dy), width=2 * half_w, height=2 * half_w, angle=0, theta1=90 if swing > 0 else 180, theta2=180 if swing > 0 else 270, color=theme["door"], linestyle=":", linewidth=0.5, zorder=7)
                 ax.add_patch(arc1)
                 ax.add_patch(arc2)
 
             elif dtype == "sliding":
                 # Sliding Patio Door (overlapping double glass lines)
-                ax.plot([dx - dw / 2, dx + 0.1], [dy + 0.05, dy + 0.05], color=theme["door"], linewidth=2.0, zorder=7)
-                ax.plot([dx - 0.1, dx + dw / 2], [dy - 0.05, dy - 0.05], color=theme["door"], linewidth=2.0, zorder=7)
-                ax.annotate("", xy=(dx + dw / 2 - 0.2, dy - 0.12), xytext=(dx + 0.2, dy - 0.12), arrowprops=dict(arrowstyle="->", color=theme["door"], lw=1.0), zorder=7)
+                ax.plot([dx - dw / 2, dx + 0.1], [dy + 0.05, dy + 0.05], color=theme["door"], linewidth=1.5, zorder=7)
+                ax.plot([dx - 0.1, dx + dw / 2], [dy - 0.05, dy - 0.05], color=theme["door"], linewidth=1.5, zorder=7)
+                ax.annotate("", xy=(dx + dw / 2 - 0.2, dy - 0.12), xytext=(dx + 0.2, dy - 0.12), arrowprops=dict(arrowstyle="->", color=theme["door"], lw=0.5), zorder=7)
 
             else:
                 # Single Swing Door
-                ax.plot([dx - dw / 2, dx - dw / 2], [dy, dy + dw * swing], color=theme["door"], linewidth=1.8, zorder=7)
-                arc = patches.Arc((dx - dw / 2, dy), width=2 * dw, height=2 * dw, angle=0, theta1=0 if swing > 0 else 270, theta2=90 if swing > 0 else 360, color=theme["door"], linestyle=":", linewidth=1.0, zorder=7)
+                ax.plot([dx - dw / 2, dx - dw / 2], [dy, dy + dw * swing], color=theme["door"], linewidth=1.5, zorder=7)
+                arc = patches.Arc((dx - dw / 2, dy), width=2 * dw, height=2 * dw, angle=0, theta1=0 if swing > 0 else 270, theta2=90 if swing > 0 else 360, color=theme["door"], linestyle=":", linewidth=0.5, zorder=7)
                 ax.add_patch(arc)
         else:
             # Vertical Door
             ax.plot([dx, dx], [dy - dw / 2, dy + dw / 2], color=theme["bg"], linewidth=5.0, zorder=6)
-            ax.plot([dx, dx + dw * swing], [dy - dw / 2, dy - dw / 2], color=theme["door"], linewidth=1.8, zorder=7)
-            arc = patches.Arc((dx, dy - dw / 2), width=2 * dw, height=2 * dw, angle=0, theta1=0, theta2=90, color=theme["door"], linestyle=":", linewidth=1.0, zorder=7)
+            ax.plot([dx, dx + dw * swing], [dy - dw / 2, dy - dw / 2], color=theme["door"], linewidth=1.5, zorder=7)
+            arc = patches.Arc((dx, dy - dw / 2), width=2 * dw, height=2 * dw, angle=0, theta1=0, theta2=90, color=theme["door"], linestyle=":", linewidth=0.5, zorder=7)
             ax.add_patch(arc)
 
     def _draw_window(self, ax: plt.Axes, win: Any, theme: Dict[str, str]) -> None:
@@ -522,15 +520,15 @@ class Blueprint2DRenderer:
             # Wall cutout gap mask
             ax.plot([wx - ww / 2, wx + ww / 2], [wy, wy], color=theme["bg"], linewidth=5.0, zorder=6)
             # Double Glass Pane Lines
-            ax.plot([wx - ww / 2, wx + ww / 2], [wy - 0.08, wy - 0.08], color=theme["window"], linewidth=1.4, zorder=7)
-            ax.plot([wx - ww / 2, wx + ww / 2], [wy + 0.08, wy + 0.08], color=theme["window"], linewidth=1.4, zorder=7)
+            ax.plot([wx - ww / 2, wx + ww / 2], [wy - 0.08, wy - 0.08], color=theme["window"], linewidth=1.5, zorder=7)
+            ax.plot([wx - ww / 2, wx + ww / 2], [wy + 0.08, wy + 0.08], color=theme["window"], linewidth=1.5, zorder=7)
             # Window Frame Jambs at ends
             ax.plot([wx - ww / 2, wx - ww / 2], [wy - 0.12, wy + 0.12], color=theme["window"], linewidth=1.5, zorder=7)
             ax.plot([wx + ww / 2, wx + ww / 2], [wy - 0.12, wy + 0.12], color=theme["window"], linewidth=1.5, zorder=7)
         else:
             ax.plot([wx, wx], [wy - ww / 2, wy + ww / 2], color=theme["bg"], linewidth=5.0, zorder=6)
-            ax.plot([wx - 0.08, wx - 0.08], [wy - ww / 2, wy + ww / 2], color=theme["window"], linewidth=1.4, zorder=7)
-            ax.plot([wx + 0.08, wx + 0.08], [wy - ww / 2, wy + ww / 2], color=theme["window"], linewidth=1.4, zorder=7)
+            ax.plot([wx - 0.08, wx - 0.08], [wy - ww / 2, wy + ww / 2], color=theme["window"], linewidth=1.5, zorder=7)
+            ax.plot([wx + 0.08, wx + 0.08], [wy - ww / 2, wy + ww / 2], color=theme["window"], linewidth=1.5, zorder=7)
             ax.plot([wx - 0.12, wx + 0.12], [wy - ww / 2, wy - ww / 2], color=theme["window"], linewidth=1.5, zorder=7)
             ax.plot([wx - 0.12, wx + 0.12], [wy + ww / 2, wy + ww / 2], color=theme["window"], linewidth=1.5, zorder=7)
 
@@ -543,7 +541,7 @@ class Blueprint2DRenderer:
             "",
             xy=(x2, y2),
             xytext=(x1, y1),
-            arrowprops=dict(arrowstyle="<->", color=theme["dim"], lw=1.2),
+            arrowprops=dict(arrowstyle="<->", color=theme["dim"], lw=0.5),
         )
         mid_x, mid_y = (x1 + x2) / 2, (y1 + y2) / 2
         rot = 90 if vertical else 0
@@ -586,12 +584,12 @@ class Blueprint2DRenderer:
         by = -3.5
         
         # Main Title Box
-        rect = patches.Rectangle((bx, by), block_w, block_h, facecolor=theme["title_bg"], edgecolor=theme["dim"], lw=1.5, zorder=20)
+        rect = patches.Rectangle((bx, by), block_w, block_h, facecolor=theme["title_bg"], edgecolor=theme["dim"], lw=0.75, zorder=20)
         ax.add_patch(rect)
         
         # Vertical Separator Lines
-        ax.plot([bx + block_w*0.3, bx + block_w*0.3], [by, by + block_h], color=theme["dim"], lw=1.0, zorder=21)
-        ax.plot([bx + block_w*0.7, bx + block_w*0.7], [by, by + block_h], color=theme["dim"], lw=1.0, zorder=21)
+        ax.plot([bx + block_w*0.3, bx + block_w*0.3], [by, by + block_h], color=theme["dim"], lw=0.5, zorder=21)
+        ax.plot([bx + block_w*0.7, bx + block_w*0.7], [by, by + block_h], color=theme["dim"], lw=0.5, zorder=21)
         
         # Content Left: Branding & Project
         ax.text(bx + 0.5, by + 1.4, "Buildmetrics AI", color=theme["door"], fontsize=9, fontweight="black", zorder=22)

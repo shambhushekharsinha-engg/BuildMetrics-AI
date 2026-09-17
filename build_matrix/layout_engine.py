@@ -26,6 +26,117 @@ from .labeling import LabelingManager
 from .engineering import EngineeringEngine
 
 
+
+class BSPNode:
+    def __init__(self, room=None):
+        self.room = room
+        self.left = None
+        self.right = None
+        self.split_horizontal = True
+        self.split_ratio = 0.5
+        self.rect = (0, 0, 10, 10)
+        
+    def is_leaf(self): return self.room is not None
+
+def _build_random_bsp(rooms):
+    import random
+    if len(rooms) == 1: return BSPNode(room=rooms[0])
+    node = BSPNode()
+    node.split_horizontal = random.choice([True, False])
+    node.split_ratio = random.uniform(0.3, 0.7)
+    random.shuffle(rooms)
+    mid = len(rooms) // 2
+    node.left = _build_random_bsp(rooms[:mid])
+    node.right = _build_random_bsp(rooms[mid:])
+    return node
+
+def _update_rects(node, x, y, w, h):
+    node.rect = (x, y, w, h)
+    if node.is_leaf(): return
+    if node.split_horizontal:
+        h_left = h * node.split_ratio
+        h_right = h - h_left
+        _update_rects(node.left, x, y, w, h_left)
+        _update_rects(node.right, x, y + h_left, w, h_right)
+    else:
+        w_left = w * node.split_ratio
+        w_right = w - w_left
+        _update_rects(node.left, x, y, w_left, h)
+        _update_rects(node.right, x + w_left, y, w_right, h)
+
+def _get_leaves(node):
+    if node.is_leaf(): return [node]
+    return _get_leaves(node.left) + _get_leaves(node.right)
+
+def _get_all_nodes(node):
+    if node.is_leaf(): return []
+    return [node] + _get_all_nodes(node.left) + _get_all_nodes(node.right)
+
+def _mutate_bsp(node):
+    import copy
+    import random
+    new_node = copy.deepcopy(node)
+    nodes = _get_all_nodes(new_node)
+    if not nodes: return new_node
+    target = random.choice(nodes)
+    mut_type = random.choice(["ratio", "flip", "swap"])
+    if mut_type == "ratio":
+        target.split_ratio = min(0.8, max(0.2, target.split_ratio + random.uniform(-0.15, 0.15)))
+    elif mut_type == "flip":
+        target.split_horizontal = not target.split_horizontal
+    elif mut_type == "swap":
+        target.left, target.right = target.right, target.left
+    return new_node
+
+def _evaluate_layout(node, prev_floor_rooms):
+    import math
+    score = 0.0
+    leaves = _get_leaves(node)
+    centroids = {}
+    
+    for leaf in leaves:
+        x, y, w, h = leaf.rect
+        centroids[leaf.room["id"]] = (x + w/2, y + h/2)
+        rtype = leaf.room.get("type", "Bedroom").lower()
+        min_w, min_h = 2.0, 2.0
+        if "bedroom" in rtype: min_w, min_h = 2.4, 2.5
+        elif "kitchen" in rtype: min_w, min_h = 1.8, 2.0
+        elif "bathroom" in rtype: min_w, min_h = 1.4, 1.6
+        elif "living" in rtype: min_w, min_h = 3.0, 3.0
+        
+        if w < min_w: score -= (min_w - w) * 100
+        if h < min_h: score -= (min_h - h) * 100
+        
+        aspect = max(w/h, h/w)
+        if aspect > 3.0:
+            score -= (aspect - 3.0) * 50
+        
+        if prev_floor_rooms and ("bathroom" in rtype or "kitchen" in rtype):
+            for pr in prev_floor_rooms:
+                if "bathroom" in pr.room_type.lower() or "kitchen" in pr.room_type.lower():
+                    dist = math.hypot(centroids[leaf.room["id"]][0] - pr.x, centroids[leaf.room["id"]][1] - pr.y)
+                    score -= dist * 20
+
+    for l1 in leaves:
+        rt1 = l1.room.get("type", "").lower()
+        c1 = centroids[l1.room["id"]]
+        for l2 in leaves:
+            if l1 == l2: continue
+            rt2 = l2.room.get("type", "").lower()
+            c2 = centroids[l2.room["id"]]
+            dist = math.hypot(c1[0]-c2[0], c1[1]-c2[1])
+            
+            if "kitchen" in rt1 and "dining" in rt2:
+                score -= dist * 10
+            if "bedroom" in rt1 and "living" in rt2:
+                score += dist * 5
+                
+        if "bedroom" in rt1:
+            score += c1[1] * 5
+            
+    return score
+
+
 class LayoutEngine:
     """Procedural Architectural Spatial Solver & High-Rise Core Engine."""
 
@@ -329,24 +440,23 @@ Return ONLY valid JSON.
             except Exception as e:
                 print(f"Generative layout failed, falling back to grid: {e}")
 
-        return self._layout_floor_rooms_grid(room_requests, floor)
+        return self._layout_floor_rooms_grid(room_requests, floor, prev_floor_rooms=None)
 
-    def _layout_floor_rooms_grid(self, room_requests: List[Dict[str, Any]], floor: int) -> List[RoomSpec]:
-        """Neufert Proportional Spatial Solver & Functional Zoning Engine."""
+    def _layout_floor_rooms_grid(self, room_requests: List[Dict[str, Any]], floor: int, prev_floor_rooms: Optional[List[RoomSpec]] = None) -> List[RoomSpec]:
+        """Constraint-Satisfaction / Simulated Annealing Spatial Solver."""
+        import random
+        import math
         x0 = self.plot.margin
         y0 = self.plot.margin
         usable_w = self.plot.length - 2 * self.plot.margin
         usable_h = self.plot.width - 2 * self.plot.margin
 
-        rooms: List[RoomSpec] = []
-
-        # Filter rooms for this floor
         if floor == 1:
             reqs = [r for r in room_requests if "bedroom" not in r["name"].lower() or "master" in r["name"].lower()]
             if not reqs:
                 reqs = room_requests[: max(3, len(room_requests) // 2)]
         else:
-            reqs = [r for r in room_requests if r not in rooms]
+            reqs = room_requests[max(3, len(room_requests) // 2):] if len(room_requests) > 3 else room_requests
             if not reqs:
                 reqs = [
                     {"name": f"Bedroom {floor}-A", "type": "Bedroom"},
@@ -355,74 +465,55 @@ Return ONLY valid JSON.
                     {"name": f"Balcony {floor}", "type": "Balcony / Patio"},
                 ]
 
-        num_rooms = max(1, len(reqs))
+        if not reqs:
+            reqs = [{"name": "Room", "type": "Bedroom"}]
 
-        # Sort rooms by Neufert functional hierarchy & weights
-        reqs = sorted(reqs, key=lambda r: self.ROOM_WEIGHTS.get(r.get("type", "Bedroom"), 1.5), reverse=True)
+        for i, r in enumerate(reqs):
+            r["id"] = i
 
-        cols = 2 if num_rooms <= 4 else 3
-        rows = math.ceil(num_rooms / cols)
+        best_bsp = _build_random_bsp(reqs)
+        _update_rects(best_bsp, x0, y0, usable_w, usable_h)
+        best_score = _evaluate_layout(best_bsp, prev_floor_rooms)
+        
+        temp = 100.0
+        cooling = 0.95
+        
+        for i in range(200):
+            candidate = _mutate_bsp(best_bsp)
+            _update_rects(candidate, x0, y0, usable_w, usable_h)
+            score = _evaluate_layout(candidate, prev_floor_rooms)
+            
+            if score > best_score or random.random() < math.exp((score - best_score) / temp):
+                best_bsp = candidate
+                best_score = score
+                
+            temp *= cooling
+            if temp < 0.1: temp = 0.1
 
-        # Compute Neufert Proportional Span Ratios based on room weights
-        row_heights = []
-        for r_i in range(rows):
-            row_items = reqs[r_i * cols : (r_i + 1) * cols]
-            avg_weight = sum(self.ROOM_WEIGHTS.get(it.get("type", "Bedroom"), 1.5) for it in row_items) / max(1, len(row_items))
-            row_heights.append(avg_weight)
-
-        total_row_w = sum(row_heights)
-        norm_row_h = [usable_h * (w / total_row_w) for w in row_heights]
-
-        curr_y = y0
-
-        for r_i in range(rows):
-            rh = norm_row_h[r_i]
-            row_items = reqs[r_i * cols : (r_i + 1) * cols]
-            n_in_row = len(row_items)
-
-            row_weights = [self.ROOM_WEIGHTS.get(it.get("type", "Bedroom"), 1.5) for it in row_items]
-            total_col_w = sum(row_weights)
-            col_widths = [usable_w * (w / total_col_w) for w in row_weights]
-
-            curr_x = x0
-
-            for c_i, req in enumerate(row_items):
-                rw = col_widths[c_i]
-                r_type = req.get("type", "Living Room")
-                r_name = req.get("name", f"Room {c_i+1}")
-                color = self.ROOM_COLOR_PALETTE.get(r_type, "#F5F5F5")
-
-                # NBC 2016 Minimum Area & Span Safeguards
-                if "bedroom" in r_type.lower():
-                    rw = max(2.4, rw)
-                    rh = max(2.5, rh)
-                elif "kitchen" in r_type.lower():
-                    rw = max(1.8, rw)
-                    rh = max(2.0, rh)
-                elif "bathroom" in r_type.lower():
-                    rw = max(1.4, rw)
-                    rh = max(1.6, rh)
-
-                rooms.append(
-                    RoomSpec(
-                        id=f"F{floor}_R{len(rooms)+1}",
-                        name=r_name,
-                        room_type=r_type,
-                        x=round(curr_x, 2),
-                        y=round(curr_y, 2),
-                        width=round(rw, 2),
-                        height=round(rh, 2),
-                        floor=floor,
-                        color=color,
-                    )
+        _update_rects(best_bsp, x0, y0, usable_w, usable_h)
+        
+        rooms = []
+        for leaf in _get_leaves(best_bsp):
+            rx, ry, rw, rh = leaf.rect
+            r_type = leaf.room.get("type", "Living Room")
+            r_name = leaf.room.get("name", "Room")
+            color = self.ROOM_COLOR_PALETTE.get(r_type, "#F5F5F5")
+            
+            rooms.append(
+                RoomSpec(
+                    id=f"F{floor}_R{len(rooms)+1}",
+                    name=r_name,
+                    room_type=r_type,
+                    x=round(rx, 2),
+                    y=round(ry, 2),
+                    width=round(rw, 2),
+                    height=round(rh, 2),
+                    floor=floor,
+                    color=color,
                 )
-                curr_x += rw
-
-            curr_y += rh
-
+            )
+            
         return rooms
-
-
 
     def _generate_walls_for_rooms(self, rooms: List[RoomSpec], floor: int) -> List[WallSpec]:
         """Extracts exterior boundary walls and interior dividing walls from room geometry."""
