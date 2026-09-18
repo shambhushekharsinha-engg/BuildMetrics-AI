@@ -11,6 +11,17 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import streamlit as st
+
+import os
+import sentry_sdk
+
+sentry_dsn = os.environ.get("SENTRY_DSN")
+if sentry_dsn:
+    sentry_sdk.init(
+        dsn=sentry_dsn,
+        traces_sample_rate=1.0,
+        environment=os.environ.get("ENVIRONMENT", "development")
+    )
 import os
 API_BASE_URL = os.environ.get("API_BASE_URL", "http://localhost:8000")
 import streamlit.components.v1 as components
@@ -750,9 +761,24 @@ with tab_export:
         if st.button("Generate PNG", key="btn_gen_png"):
             with st.spinner("Exporting PNG..."):
                 try:
-                    resp = requests.post(f"{API_BASE_URL}/api/v1/export", json={"building_id": st.session_state.building_id, "format": "png", "floor": 1}, timeout=15)
+                    
+                    import time
+                    resp = requests.post(f"{API_BASE_URL}/api/v1/export/async", json={"building_id": st.session_state.building_id, "format": "png", "floor": 1}, timeout=15)
                     resp.raise_for_status()
-                    st.session_state.export_png_data = resp.content
+                    task_id = resp.json()["task_id"]
+                    
+                    while True:
+                        status_resp = requests.get(f"{API_BASE_URL}/api/v1/export/status/{task_id}")
+                        status_data = status_resp.json()
+                        if status_data["status"] == "SUCCESS":
+                            download_url = f"{API_BASE_URL}/api/v1/download?path={status_data['result']['path']}&filename={status_data['result']['filename']}&media_type={status_data['result']['media_type']}"
+                            st.session_state.export_png_data = requests.get(download_url).content
+                            break
+                        elif status_data["status"] == "FAILURE":
+                            st.error(f"Export failed: {status_data.get('error', 'Unknown Error')}")
+                            break
+                        time.sleep(1.0)
+
                 except Exception as e: st.error(f"Export failed: {e}")
         if st.session_state.export_png_data:
             st.download_button("Download 2D PNG", st.session_state.export_png_data, file_name="BUILD-MATRIX_2D_Blueprint.png", mime="image/png", use_container_width=True)
@@ -764,9 +790,24 @@ with tab_export:
         if st.button("Generate SVG", key="btn_gen_svg"):
             with st.spinner("Exporting SVG..."):
                 try:
-                    resp = requests.post(f"{API_BASE_URL}/api/v1/export", json={"building_id": st.session_state.building_id, "format": "svg", "floor": 1}, timeout=15)
+                    
+                    import time
+                    resp = requests.post(f"{API_BASE_URL}/api/v1/export/async", json={"building_id": st.session_state.building_id, "format": "svg", "floor": 1}, timeout=15)
                     resp.raise_for_status()
-                    st.session_state.export_svg_data = resp.content
+                    task_id = resp.json()["task_id"]
+                    
+                    while True:
+                        status_resp = requests.get(f"{API_BASE_URL}/api/v1/export/status/{task_id}")
+                        status_data = status_resp.json()
+                        if status_data["status"] == "SUCCESS":
+                            download_url = f"{API_BASE_URL}/api/v1/download?path={status_data['result']['path']}&filename={status_data['result']['filename']}&media_type={status_data['result']['media_type']}"
+                            st.session_state.export_svg_data = requests.get(download_url).content
+                            break
+                        elif status_data["status"] == "FAILURE":
+                            st.error(f"Export failed: {status_data.get('error', 'Unknown Error')}")
+                            break
+                        time.sleep(1.0)
+
                 except Exception as e: st.error(f"Export failed: {e}")
         if st.session_state.export_svg_data:
             st.download_button("Download 2D SVG", st.session_state.export_svg_data, file_name="BUILD-MATRIX_2D_Blueprint.svg", mime="image/svg+xml", use_container_width=True)
@@ -778,9 +819,24 @@ with tab_export:
         if st.button("Generate PDF", key="btn_gen_pdf"):
             with st.spinner("Exporting PDF..."):
                 try:
-                    resp = requests.post(f"{API_BASE_URL}/api/v1/export", json={"building_id": st.session_state.building_id, "format": "pdf", "floor": 1}, timeout=15)
+                    
+                    import time
+                    resp = requests.post(f"{API_BASE_URL}/api/v1/export/async", json={"building_id": st.session_state.building_id, "format": "pdf", "floor": 1}, timeout=15)
                     resp.raise_for_status()
-                    st.session_state.export_pdf_data = resp.content
+                    task_id = resp.json()["task_id"]
+                    
+                    while True:
+                        status_resp = requests.get(f"{API_BASE_URL}/api/v1/export/status/{task_id}")
+                        status_data = status_resp.json()
+                        if status_data["status"] == "SUCCESS":
+                            download_url = f"{API_BASE_URL}/api/v1/download?path={status_data['result']['path']}&filename={status_data['result']['filename']}&media_type={status_data['result']['media_type']}"
+                            st.session_state.export_pdf_data = requests.get(download_url).content
+                            break
+                        elif status_data["status"] == "FAILURE":
+                            st.error(f"Export failed: {status_data.get('error', 'Unknown Error')}")
+                            break
+                        time.sleep(1.0)
+
                 except Exception as e: st.error(f"Export failed: {e}")
         if st.session_state.export_pdf_data:
             st.download_button("Download 2D PDF", st.session_state.export_pdf_data, file_name="BUILD-MATRIX_2D_Blueprint.pdf", mime="application/pdf", use_container_width=True)
@@ -792,9 +848,24 @@ with tab_export:
         if st.button("Generate OBJ", key="btn_gen_obj"):
             with st.spinner("Exporting OBJ..."):
                 try:
-                    resp = requests.post(f"{API_BASE_URL}/api/v1/export", json={"building_id": st.session_state.building_id, "format": "obj"}, timeout=15)
+                    
+                    import time
+                    resp = requests.post(f"{API_BASE_URL}/api/v1/export/async", json={"building_id": st.session_state.building_id, "format": "obj"}, timeout=15)
                     resp.raise_for_status()
-                    st.session_state.export_obj_data = resp.content
+                    task_id = resp.json()["task_id"]
+                    
+                    while True:
+                        status_resp = requests.get(f"{API_BASE_URL}/api/v1/export/status/{task_id}")
+                        status_data = status_resp.json()
+                        if status_data["status"] == "SUCCESS":
+                            download_url = f"{API_BASE_URL}/api/v1/download?path={status_data['result']['path']}&filename={status_data['result']['filename']}&media_type={status_data['result']['media_type']}"
+                            st.session_state.export_obj_data = requests.get(download_url).content
+                            break
+                        elif status_data["status"] == "FAILURE":
+                            st.error(f"Export failed: {status_data.get('error', 'Unknown Error')}")
+                            break
+                        time.sleep(1.0)
+
                 except Exception as e: st.error(f"Export failed: {e}")
         if st.session_state.export_obj_data:
             st.download_button("Download 3D OBJ", st.session_state.export_obj_data, file_name="BUILD-MATRIX_3D_Model.obj", mime="model/obj", use_container_width=True)
@@ -808,11 +879,26 @@ with tab_export:
             st.session_state.zip_data = None
 
         if st.button("Generate Complete Package", key="btn_gen_zip"):
-            with st.spinner("Bundling ZIP..."):
-                zip_path = os.path.join(temp_dir, "BUILD-MATRIX_Package.zip")
-                ExporterEngine.export_bundle_zip(building_model, zip_path)
-                with open(zip_path, "rb") as f:
-                    st.session_state.zip_data = f.read()
+            with st.spinner("Bundling ZIP (via Background Worker)..."):
+                try:
+                    import time
+                    resp = requests.post(f"{API_BASE_URL}/api/v1/export/async", json={"building_id": st.session_state.building_id, "format": "bundle"}, timeout=15)
+                    resp.raise_for_status()
+                    task_id = resp.json()["task_id"]
+                    
+                    while True:
+                        status_resp = requests.get(f"{API_BASE_URL}/api/v1/export/status/{task_id}")
+                        status_data = status_resp.json()
+                        if status_data["status"] == "SUCCESS":
+                            download_url = f"{API_BASE_URL}/api/v1/download?path={status_data['result']['path']}&filename={status_data['result']['filename']}&media_type={status_data['result']['media_type']}"
+                            st.session_state.zip_data = requests.get(download_url).content
+                            break
+                        elif status_data["status"] == "FAILURE":
+                            st.error(f"Export failed: {status_data.get('error', 'Unknown Error')}")
+                            break
+                        time.sleep(1.0)
+                except Exception as e:
+                    st.error(f"Export failed: {e}")
 
         if st.session_state.zip_data:
             st.download_button(

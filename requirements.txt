@@ -8,6 +8,8 @@ alembic==1.20.0
     # via -r requirements.in
 altair==6.2.2
     # via streamlit
+amqp==5.3.1
+    # via kombu
 annotated-doc==0.0.5
     # via fastapi
 annotated-types==0.8.0
@@ -22,16 +24,32 @@ attrs==26.1.0
     #   referencing
 bcrypt==5.0.0
     # via -r requirements.in
+billiard==4.3.0
+    # via celery
+celery[redis]==5.6.3
+    # via -r requirements.in
 certifi==2026.7.22
-    # via requests
+    # via
+    #   requests
+    #   sentry-sdk
 cffi==2.1.1
     # via cryptography
 charset-normalizer==3.5.1
     # via requests
 click==8.5.0
     # via
+    #   celery
+    #   click-didyoumean
+    #   click-plugins
+    #   click-repl
     #   streamlit
     #   uvicorn
+click-didyoumean==0.3.1
+    # via celery
+click-plugins==1.1.1.2
+    # via celery
+click-repl==0.4.0
+    # via celery
 cloudpickle==3.1.2
     # via joblib
 colorama==0.4.6
@@ -45,7 +63,9 @@ cryptography==50.0.1
 cycler==0.12.1
     # via matplotlib
 fastapi==0.141.1
-    # via -r requirements.in
+    # via
+    #   -r requirements.in
+    #   sentry-sdk
 fonttools==4.65.0
     # via matplotlib
 google-ai-generativelanguage==0.6.15
@@ -110,6 +130,8 @@ jsonschema-specifications==2025.9.1
     # via jsonschema
 kiwisolver==1.5.1
     # via matplotlib
+kombu[redis]==5.6.2
+    # via celery
 mako==1.4.1
     # via alembic
 markupsafe==3.0.3
@@ -139,6 +161,7 @@ opencv-python-headless==5.0.0.93
 packaging==26.3
     # via
     #   altair
+    #   kombu
     #   matplotlib
     #   pytest
     #   streamlit
@@ -153,6 +176,8 @@ pillow==12.3.0
     #   streamlit
 pluggy==1.6.0
     # via pytest
+prompt-toolkit==3.0.53
+    # via click-repl
 proto-plus==1.28.2
     # via
     #   google-ai-generativelanguage
@@ -195,12 +220,15 @@ pytest==9.1.1
     # via -r requirements.in
 python-dateutil==2.9.0.post0
     # via
+    #   celery
     #   matplotlib
     #   pandas
 python-json-logger==4.2.0
     # via -r requirements.in
 python-multipart==0.0.32
     # via streamlit
+redis==6.4.0
+    # via kombu
 referencing==0.37.0
     # via
     #   jsonschema
@@ -220,6 +248,8 @@ scipy==1.18.1
     # via
     #   -r requirements.in
     #   scikit-learn
+sentry-sdk[fastapi]==2.69.2
+    # via -r requirements.in
 six==1.17.0
     # via python-dateutil
 sqlalchemy==2.0.52
@@ -247,6 +277,7 @@ typing-extensions==4.16.0
     #   alembic
     #   altair
     #   anyio
+    #   click-repl
     #   fastapi
     #   google-generativeai
     #   grpcio
@@ -260,16 +291,30 @@ typing-inspection==0.4.4
     #   fastapi
     #   pydantic
 tzdata==2026.3
-    # via pandas
+    # via
+    #   kombu
+    #   pandas
+    #   tzlocal
+tzlocal==5.4.4
+    # via celery
 uritemplate==4.2.0
     # via google-api-python-client
 urllib3==2.7.0
-    # via requests
+    # via
+    #   requests
+    #   sentry-sdk
 uvicorn==0.52.4
     # via
     #   -r requirements.in
     #   streamlit
+vine==5.1.0
+    # via
+    #   amqp
+    #   celery
+    #   kombu
 watchdog==6.0.0
     # via streamlit
+wcwidth==0.8.4
+    # via prompt-toolkit
 websockets==16.1.1
     # via streamlit

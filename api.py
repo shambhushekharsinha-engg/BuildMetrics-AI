@@ -4,6 +4,19 @@ import tempfile
 import json
 from dataclasses import asdict
 from fastapi import FastAPI, HTTPException
+
+import os
+import sentry_sdk
+from sentry_sdk.integrations.fastapi import FastApiIntegration
+
+sentry_dsn = os.environ.get("SENTRY_DSN")
+if sentry_dsn:
+    sentry_sdk.init(
+        dsn=sentry_dsn,
+        traces_sample_rate=1.0,
+        integrations=[FastApiIntegration()],
+        environment=os.environ.get("ENVIRONMENT", "development")
+    )
 from fastapi.responses import FileResponse
 
 from build_matrix.schemas import GenerateRequest, Render2DRequest, Render3DRequest, ExportRequest
@@ -182,6 +195,9 @@ def export_file(req: ExportRequest):
 from build_matrix.rendering_3d import Blueprint3DRenderer
 from fastapi.responses import HTMLResponse
 
+from worker import export_model_task, celery_app
+
+
 @app.post("/api/v1/render/3d")
 def render_3d(req: Render3DRequest):
     if req.building_id not in MODEL_STORE:
@@ -190,3 +206,37 @@ def render_3d(req: Render3DRequest):
     renderer_3d = Blueprint3DRenderer(model)
     html_code = renderer_3d.generate_threejs_html()
     return HTMLResponse(content=html_code)
+
+
+@app.get("/sentry-debug")
+async def trigger_error():
+    division_by_zero = 1 / 0
+
+
+@app.post("/api/v1/export/async")
+def export_file_async(req: ExportRequest):
+    if req.building_id not in MODEL_STORE:
+        raise HTTPException(status_code=404, detail="Building model not found. Please regenerate.")
+    
+    model = MODEL_STORE[req.building_id]['model']
+    model_dict = model.model_dump()
+    task = export_model_task.delay(model_dict, req.format, req.floor)
+    return {"task_id": task.id}
+
+@app.get("/api/v1/export/status/{task_id}")
+def get_export_status(task_id: str):
+    from celery.result import AsyncResult
+    res = AsyncResult(task_id, app=celery_app)
+    if res.state == 'SUCCESS':
+        return {"status": "SUCCESS", "result": res.result}
+    elif res.state == 'FAILURE':
+        return {"status": "FAILURE", "error": str(res.info)}
+    else:
+        return {"status": res.state}
+
+@app.get("/api/v1/download")
+def download_file(path: str, filename: str, media_type: str):
+    import os
+    if not os.path.exists(path):
+        raise HTTPException(status_code=404, detail="File not found")
+    return FileResponse(path, media_type=media_type, filename=filename)

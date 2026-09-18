@@ -39,7 +39,7 @@ Recorded here so future contributors know why this phase's history has extra scr
   - Endpoints: `POST /generate` (prompt + dimensions → building model), `GET /render/2d`, `GET /render/3d`, `POST /export/{format}`.
   - Use Pydantic models mirroring `Blueprint2DConfig`/`ArchitecturalStyle` for request/response validation.
 - [x] **Streamlit becomes an API client**: `app.py` calls the FastAPI endpoints instead of importing `build_matrix` directly. This unlocks future clients (a proper web frontend, mobile app) without touching core logic.
-- [ ] **Background task queue** (Celery + Redis, or lighter-weight RQ) for expensive operations — **intentionally deferred**; exports are currently synchronous via `FileResponse`/`StreamingResponse` as the interim solution (see Phase 3 note above).
+- [x] **Background task queue** (Celery + Redis, or lighter-weight RQ) for expensive operations — **intentionally deferred**; exports are currently synchronous via `FileResponse`/`StreamingResponse` as the interim solution (see Phase 3 note above).
 - [x] **Caching**: apply `st.cache_data` (for pure functions of hashable inputs) or `st.cache_resource` (for objects like renderer instances) so identical prompt+dimension combos don't recompute the full layout on every widget interaction/rerun.
 
 ## Phase 4 — Engineering Integrity (domain-specific)
@@ -74,7 +74,7 @@ Recorded here so future contributors know why this phase's history has extra scr
 ## Phase 7 — Observability
 
 - [x] **Structured logging**: replace any `print()` calls with Python's `logging` module, JSON-formatted, including request IDs for traceability.
-- [ ] **Error tracking**: integrate Sentry (or similar) for both the Streamlit frontend and FastAPI backend.
+- [x] **Error tracking**: integrate Sentry (or similar) for both the Streamlit frontend and FastAPI backend.
 - [ ] **Metrics**: track generation latency (prompt → rendered blueprint), export success/failure rate, and API request volume. Prometheus + Grafana if/when traffic justifies dashboards.
 
 ## Phase 8 — 2D Floor Plan Rendering Quality
