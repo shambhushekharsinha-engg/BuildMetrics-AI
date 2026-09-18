@@ -34,8 +34,12 @@ def export_model_task(model_dict: dict, format: str, floor: int = 1) -> dict:
     from build_matrix.models import BuildingModel
     from build_matrix.exporter import ExporterEngine
     
-    model = BuildingModel.model_validate(model_dict)
-    temp_dir = tempfile.mkdtemp()
+    from pydantic import TypeAdapter
+    model = TypeAdapter(BuildingModel).validate_python(model_dict)
+    
+    shared_dir = os.environ.get("SHARED_EXPORT_DIR", tempfile.gettempdir())
+    os.makedirs(shared_dir, exist_ok=True)
+    temp_dir = tempfile.mkdtemp(dir=shared_dir)
     
     path = ""
     filename = ""

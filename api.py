@@ -219,7 +219,9 @@ def export_file_async(req: ExportRequest):
         raise HTTPException(status_code=404, detail="Building model not found. Please regenerate.")
     
     model = MODEL_STORE[req.building_id]['model']
-    model_dict = model.model_dump()
+    from pydantic import TypeAdapter
+    from build_matrix.models import BuildingModel
+    model_dict = TypeAdapter(BuildingModel).dump_python(model, mode='json')
     task = export_model_task.delay(model_dict, req.format, req.floor)
     return {"task_id": task.id}
 

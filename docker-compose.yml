@@ -29,6 +29,7 @@ services:
     environment:
     - DATABASE_URL=postgresql://buildmetrics:supersecret@db:5432/buildmetrics
     - REDIS_URL=redis://redis:6379/0
+    - SHARED_EXPORT_DIR=/app/exports
     ports:
     - 8000:8000
     command: 'sh -c "alembic upgrade head && uvicorn api:app --host 0.0.0.0 --port
@@ -49,6 +50,8 @@ services:
       interval: 10s
       timeout: 5s
       retries: 3
+    volumes:
+    - exports:/app/exports
   app:
     build:
       context: .
@@ -98,6 +101,7 @@ services:
     environment:
     - DATABASE_URL=postgresql://buildmetrics:supersecret@db:5432/buildmetrics
     - REDIS_URL=redis://redis:6379/0
+    - SHARED_EXPORT_DIR=/app/exports
     command:
     - celery
     - -A
@@ -109,5 +113,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    volumes:
+    - exports:/app/exports
 volumes:
   pgdata: null
+  exports: null
