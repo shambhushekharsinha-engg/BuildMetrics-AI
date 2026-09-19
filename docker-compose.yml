@@ -30,6 +30,7 @@ services:
     - DATABASE_URL=postgresql://buildmetrics:supersecret@db:5432/buildmetrics
     - REDIS_URL=redis://redis:6379/0
     - SHARED_EXPORT_DIR=/app/exports
+    - PYTHONPATH=/app
     ports:
     - 8000:8000
     command: 'sh -c "alembic upgrade head && uvicorn api:app --host 0.0.0.0 --port
@@ -64,6 +65,7 @@ services:
     - DATABASE_URL=postgresql://buildmetrics:supersecret@db:5432/buildmetrics
     - API_BASE_URL=http://api:8000
     - REDIS_URL=redis://redis:6379/0
+    - PYTHONPATH=/app
     ports:
     - 8501:8501
     command:
@@ -102,6 +104,7 @@ services:
     - DATABASE_URL=postgresql://buildmetrics:supersecret@db:5432/buildmetrics
     - REDIS_URL=redis://redis:6379/0
     - SHARED_EXPORT_DIR=/app/exports
+    - PYTHONPATH=/app
     command:
     - celery
     - -A

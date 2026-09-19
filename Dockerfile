@@ -4,6 +4,7 @@ FROM python:3.12-slim as builder
 WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
 
 # Install build dependencies
 RUN apt-get update && \
@@ -20,6 +21,7 @@ FROM python:3.12-slim as runner
 WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
 
 # Install runtime dependencies (e.g. libpq for psycopg2)
 RUN apt-get update && \
