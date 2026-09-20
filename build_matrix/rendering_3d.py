@@ -697,7 +697,7 @@ class Blueprint3DRenderer:
 
                 mesh.position.set(midX, midY, midZ);
                 mesh.rotation.y = -angle;
-                mesh.userData = {{ type: "Structural Beam", id: b.id, floor: b.floor, span: span.toFixed(2) }};
+                mesh.userData = {{ type: "Wall", floor: w.floor, exterior: w.ext }};
                 mesh.castShadow = true;
                 mesh.receiveShadow = true;
                 buildingGroup.add(mesh);
