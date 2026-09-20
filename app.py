@@ -525,7 +525,7 @@ with tab_2d:
                     timeout=15
                 )
                 resp.raise_for_status()
-                st.image(resp.content, use_column_width=True)
+                st.image(resp.content, use_container_width=True)
             except Exception as e:
                 st.error(f"Failed to render 2D blueprint: {e}")
 
