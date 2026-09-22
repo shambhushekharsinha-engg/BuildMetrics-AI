@@ -48,16 +48,30 @@ from build_matrix.models import ArchitecturalStyle, Blueprint2DConfig, BuildingM
 from build_matrix.input_handler import InputHandler
 from build_matrix.exporter import ExporterEngine
 
-# Streamlit Page Config
-st.set_page_config(
-    page_title="Buildmetrics AI — 2D & 3D Architectural Blueprint Generator",
-    page_icon="📐",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
+# Streamlit Page Config handled at top
 
 import db
 db.init_db()  # Replaced with Alembic auto-upgrade
+
+@st.cache_data(show_spinner=False)
+def fetch_2d_image_cached(building_id: str, payload: dict):
+    resp = requests.post(
+        f"{API_BASE_URL}/api/v1/render/2d",
+        json=payload,
+        timeout=15
+    )
+    resp.raise_for_status()
+    return resp.content
+
+@st.cache_data(show_spinner=False)
+def fetch_3d_html_cached(building_id: str):
+    resp = requests.post(
+        f"{API_BASE_URL}/api/v1/render/3d",
+        json={"building_id": building_id},
+        timeout=15
+    )
+    resp.raise_for_status()
+    return resp.text
 
 if 'user_id' not in st.session_state:
     st.session_state.user_id = None
@@ -516,34 +530,30 @@ with tab_2d:
 
         with st.spinner("Rendering 2D Blueprint via API..."):
             try:
-                resp = requests.post(
-                    f"{API_BASE_URL}/api/v1/render/2d",
-                    json={
-                        "building_id": st.session_state.building_id,
-                        "grid_spacing": config_2d.grid_spacing,
-                        "show_grid": config_2d.show_grid,
-                        "show_dimensions": config_2d.show_dimensions,
-                        "show_pillars": config_2d.show_pillars,
-                        "show_beams": config_2d.show_beams,
-                        "show_stairs": config_2d.show_stairs,
-                        "show_fixtures": config_2d.show_fixtures,
-                        "show_axis_grid": config_2d.show_axis_grid,
-                        "show_hatches": config_2d.show_hatches,
-                        "show_room_labels": config_2d.show_room_labels,
-                        "show_title_block": config_2d.show_title_block,
-                        "show_compass": config_2d.show_compass,
-                        "show_main_gate": config_2d.show_main_gate,
-                        "show_garden": config_2d.show_garden,
-                        "show_boundary_wall": config_2d.show_boundary_wall,
-                        "show_pathway": config_2d.show_pathway,
-                        "dpi": config_2d.dpi,
-                        "theme": config_2d.theme,
-                        "floor": selected_floor
-                    },
-                    timeout=15
-                )
-                resp.raise_for_status()
-                st.image(resp.content, use_container_width=True)
+                payload = {
+                    "building_id": st.session_state.building_id,
+                    "grid_spacing": config_2d.grid_spacing,
+                    "show_grid": config_2d.show_grid,
+                    "show_dimensions": config_2d.show_dimensions,
+                    "show_pillars": config_2d.show_pillars,
+                    "show_beams": config_2d.show_beams,
+                    "show_stairs": config_2d.show_stairs,
+                    "show_fixtures": config_2d.show_fixtures,
+                    "show_axis_grid": config_2d.show_axis_grid,
+                    "show_hatches": config_2d.show_hatches,
+                    "show_room_labels": config_2d.show_room_labels,
+                    "show_title_block": config_2d.show_title_block,
+                    "show_compass": config_2d.show_compass,
+                    "show_main_gate": config_2d.show_main_gate,
+                    "show_garden": config_2d.show_garden,
+                    "show_boundary_wall": config_2d.show_boundary_wall,
+                    "show_pathway": config_2d.show_pathway,
+                    "dpi": config_2d.dpi,
+                    "theme": config_2d.theme,
+                    "floor": selected_floor
+                }
+                img_bytes = fetch_2d_image_cached(st.session_state.building_id, payload)
+                st.image(img_bytes, use_container_width=True)
             except Exception as e:
                 st.error(f"Failed to render 2D blueprint: {e}")
 
@@ -557,9 +567,7 @@ with tab_3d:
 
     with st.spinner("Rendering 3D Model via API..."):
         try:
-            resp = requests.post(f"{API_BASE_URL}/api/v1/render/3d", json={"building_id": st.session_state.building_id}, timeout=15)
-            resp.raise_for_status()
-            html_3d_code = resp.text
+            html_3d_code = fetch_3d_html_cached(st.session_state.building_id)
         except Exception as e:
             st.error(f"Failed to render 3D model: {e}")
             html_3d_code = "" 
