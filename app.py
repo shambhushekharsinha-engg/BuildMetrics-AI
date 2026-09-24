@@ -2,24 +2,23 @@
 Buildmetrics AI — AI-Powered Architectural Blueprint Generator
 Interactive Web Application powered by Streamlit and Three.js.
 """
+import hashlib
+import json
 import os
 import tempfile
 import time
-import json
-import hashlib
 
 import matplotlib
+
 matplotlib.use('Agg')
-import matplotlib.pyplot as plt
 import requests
 import sentry_sdk
 import streamlit as st
 import streamlit.components.v1 as components
 from pydantic import TypeAdapter
 
-from build_matrix.models import ArchitecturalStyle, Blueprint2DConfig, BuildingModel
 from build_matrix.input_handler import InputHandler
-from build_matrix.exporter import ExporterEngine
+from build_matrix.models import ArchitecturalStyle, Blueprint2DConfig, BuildingModel
 
 st.set_page_config(
     page_title="BuildMetrics AI",
@@ -50,6 +49,7 @@ if sentry_dsn:
 API_BASE_URL = os.environ.get("API_BASE_URL", "http://localhost:8000")
 
 import db
+
 db.init_db()  # Runs Alembic migrations on startup
 
 @st.cache_data(show_spinner=False)
@@ -80,7 +80,7 @@ def _check_api_health() -> bool:
     try:
         resp = requests.get(f"{API_BASE_URL}/healthz", timeout=3)
         return resp.status_code == 200
-    except Exception:
+    except requests.exceptions.RequestException:
         return False
 
 if 'user_id' not in st.session_state:
@@ -191,51 +191,50 @@ with st.sidebar.expander("🤖 Agentic Architect Chat", expanded=False):
         st.markdown(f"**{msg['role'].capitalize()}**: {msg['content']}")
     
     ai_input = st.text_input("Ask AI...", placeholder="e.g., Make plot width 30m and add a pool")
-    if st.button("💬 Send to Architect"):
-        if ai_input:
-            st.session_state.chat_history.append({"role": "user", "content": ai_input})
+    if st.button("💬 Send to Architect") and ai_input:
+        st.session_state.chat_history.append({"role": "user", "content": ai_input})
 
-            try:
-                import google.generativeai as genai
-                genai.configure(api_key=os.environ.get("GEMINI_API_KEY", ""))
-                model = genai.GenerativeModel("gemini-2.5-flash")
-                # Use real newlines (not escaped \n literals)
-                chat_context = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history])
-                sys_prompt = f"You are an AI architect. The user is updating a building layout. Current prompt: '{st.session_state.get('prompt_parsed', {}).get('raw_prompt', '')}'. Respond briefly with the new updated prompt instruction based on their request. Do not explain."
-                response = model.generate_content(f"{sys_prompt}\n\nChat:\n{chat_context}")
-                new_instruction = response.text.strip()
-                st.session_state.chat_history.append({"role": "assistant", "content": f"Understood. I will redesign based on: {new_instruction}..."})
+        try:
+            import google.generativeai as genai
+            genai.configure(api_key=os.environ.get("GEMINI_API_KEY", ""))
+            model = genai.GenerativeModel("gemini-2.5-flash")
+            # Use real newlines (not escaped \n literals)
+            chat_context = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history])
+            sys_prompt = f"You are an AI architect. The user is updating a building layout. Current prompt: '{st.session_state.get('prompt_parsed', {}).get('raw_prompt', '')}'. Respond briefly with the new updated prompt instruction based on their request. Do not explain."
+            response = model.generate_content(f"{sys_prompt}\n\nChat:\n{chat_context}")
+            new_instruction = response.text.strip()
+            st.session_state.chat_history.append({"role": "assistant", "content": f"Understood. I will redesign based on: {new_instruction}..."})
 
-                # Capture snapshot before regeneration for diff view
-                if "building_model_cache" in st.session_state:
-                    from collections import Counter
-                    prev_model = TypeAdapter(BuildingModel).validate_python(st.session_state.building_model_cache)
-                    cost_usd = prev_model.boq_estimate.cost_usd if prev_model.boq_estimate else 0
-                    total_built = sum(prev_model.total_building_area(f) for f in range(1, prev_model.plot.num_floors + 1))
-                    base_days = 90 + (prev_model.plot.num_floors * 45)
-                    total_days = base_days + int(base_days * 0.12)
-                    compliance_issues = sum(1 for a in prev_model.annotations if a.category == 'compliance_tag' and a.style_props.get('color') == 'red')
+            # Capture snapshot before regeneration for diff view
+            if "building_model_cache" in st.session_state:
+                from collections import Counter
+                prev_model = TypeAdapter(BuildingModel).validate_python(st.session_state.building_model_cache)
+                cost_usd = prev_model.boq_estimate.cost_usd if prev_model.boq_estimate else 0
+                total_built = sum(prev_model.total_building_area(f) for f in range(1, prev_model.plot.num_floors + 1))
+                base_days = 90 + (prev_model.plot.num_floors * 45)
+                total_days = base_days + int(base_days * 0.12)
+                compliance_issues = sum(1 for a in prev_model.annotations if a.category == 'compliance_tag' and a.style_props.get('color') == 'red')
 
-                    room_counts = Counter((r.room_type.lower(), r.floor) for r in prev_model.rooms)
-                    room_areas = {(r.room_type.lower(), r.floor): r.area for r in prev_model.rooms}
+                room_counts = Counter((r.room_type.lower(), r.floor) for r in prev_model.rooms)
+                room_areas = {(r.room_type.lower(), r.floor): r.area for r in prev_model.rooms}
 
-                    st.session_state.pre_gen_snapshot = {
-                        "cost": cost_usd,
-                        "area": total_built,
-                        "days": total_days,
-                        "compliance": compliance_issues,
-                        "room_counts": dict(room_counts),
-                        "room_areas": room_areas,
-                        "new_instruction": new_instruction
-                    }
-                    st.session_state.pending_ai_diff = True
+                st.session_state.pre_gen_snapshot = {
+                    "cost": cost_usd,
+                    "area": total_built,
+                    "days": total_days,
+                    "compliance": compliance_issues,
+                    "room_counts": dict(room_counts),
+                    "room_areas": room_areas,
+                    "new_instruction": new_instruction
+                }
+                st.session_state.pending_ai_diff = True
 
-                # Override the manual prompt and trigger regeneration
-                st.session_state.ai_override_prompt = new_instruction
-                st.session_state.force_generate = True
-                st.rerun()
-            except Exception as e:
-                st.error(f"AI Error: {str(e)}", icon="🤖")
+            # Override the manual prompt and trigger regeneration
+            st.session_state.ai_override_prompt = new_instruction
+            st.session_state.force_generate = True
+            st.rerun()
+        except Exception as e:  # noqa: BLE001
+            st.error(f"AI Error: {e!s}", icon="🤖")
 
 
 if "wd" not in st.session_state:
@@ -400,8 +399,8 @@ if should_generate:
             st.session_state.building_id = data["building_id"]
             st.session_state.building_model_cache = data["model"]
             st.session_state.last_inputs = current_inputs
-        except Exception as e:
-            st.error(f"Failed to generate building: {e}")
+        except requests.exceptions.RequestException as e:
+            st.error(f"Failed to generate building: {e!s}")
             st.stop()
 
 building_model = TypeAdapter(BuildingModel).validate_python(st.session_state.building_model_cache)
@@ -438,7 +437,7 @@ if st.session_state.get("pending_ai_diff") and "pre_gen_snapshot" in st.session_
         
         room_msgs = []
         all_keys = set(prev["room_counts"].keys()) | set(curr_room_counts.keys())
-        for k in sorted(list(all_keys), key=lambda x: (x[1], x[0])):
+        for k in sorted(all_keys, key=lambda x: (x[1], x[0])):
             rtype, floor = k
             p_count = prev["room_counts"].get(k, 0)
             c_count = curr_room_counts.get(k, 0)
@@ -569,8 +568,8 @@ with tab_2d:
                 st.image(img_bytes, use_container_width=True)
             except requests.exceptions.ConnectionError:
                 st.error("❌ Cannot reach API server. Is the FastAPI service running on port 8000?")
-            except Exception as e:
-                st.error(f"Failed to render 2D blueprint: {e}")
+            except Exception as e:  # noqa: BLE001
+                st.error(f"Failed to render 2D blueprint: {e!s}")
 
 
 # ---------------------------------------------------------
@@ -583,9 +582,9 @@ with tab_3d:
     with st.spinner("Rendering 3D Model via API..."):
         try:
             html_3d_code = fetch_3d_html_cached(st.session_state.building_id)
-        except Exception as e:
-            st.error(f"Failed to render 3D model: {e}")
-            html_3d_code = "" 
+        except Exception as e:  # noqa: BLE001
+            st.error(f"Failed to render 3D model: {e!s}")
+            html_3d_code = ""
 
     # Embed Three.js 3D Viewport HTML Component
     components.html(html_3d_code, height=650, scrolling=False)
@@ -856,7 +855,8 @@ with tab_export:
                     st.session_state.export_png_data = _poll_export_task(
                         "png", {"building_id": st.session_state.building_id, "format": "png", "floor": 1}
                     )
-                except Exception as e: st.error(f"Export failed: {e}")
+                except Exception as e:  # noqa: BLE001
+                    st.error(f"Export failed: {e!s}")
         if st.session_state.export_png_data:
             st.download_button("⬇️ Download 2D PNG", st.session_state.export_png_data, file_name="BUILD-MATRIX_2D_Blueprint.png", mime="image/png", use_container_width=True)
 
@@ -870,7 +870,8 @@ with tab_export:
                     st.session_state.export_svg_data = _poll_export_task(
                         "svg", {"building_id": st.session_state.building_id, "format": "svg", "floor": 1}
                     )
-                except Exception as e: st.error(f"Export failed: {e}")
+                except Exception as e:  # noqa: BLE001
+                    st.error(f"Export failed: {e!s}")
         if st.session_state.export_svg_data:
             st.download_button("⬇️ Download 2D SVG", st.session_state.export_svg_data, file_name="BUILD-MATRIX_2D_Blueprint.svg", mime="image/svg+xml", use_container_width=True)
 
@@ -884,7 +885,8 @@ with tab_export:
                     st.session_state.export_pdf_data = _poll_export_task(
                         "pdf", {"building_id": st.session_state.building_id, "format": "pdf", "floor": 1}
                     )
-                except Exception as e: st.error(f"Export failed: {e}")
+                except Exception as e:  # noqa: BLE001
+                    st.error(f"Export failed: {e!s}")
         if st.session_state.export_pdf_data:
             st.download_button("⬇️ Download 2D PDF", st.session_state.export_pdf_data, file_name="BUILD-MATRIX_2D_Blueprint.pdf", mime="application/pdf", use_container_width=True)
 
@@ -898,7 +900,8 @@ with tab_export:
                     st.session_state.export_obj_data = _poll_export_task(
                         "obj", {"building_id": st.session_state.building_id, "format": "obj", "floor": 1}
                     )
-                except Exception as e: st.error(f"Export failed: {e}")
+                except Exception as e:  # noqa: BLE001
+                    st.error(f"Export failed: {e!s}")
         if st.session_state.export_obj_data:
             st.download_button("⬇️ Download 3D OBJ", st.session_state.export_obj_data, file_name="BUILD-MATRIX_3D_Model.obj", mime="model/obj", use_container_width=True)
 
@@ -918,8 +921,8 @@ with tab_export:
                         {"building_id": st.session_state.building_id, "format": "bundle", "floor": 1},
                         max_wait_secs=60  # ZIP needs more time
                     )
-                except Exception as e:
-                    st.error(f"Export failed: {e}")
+                except Exception as e:  # noqa: BLE001
+                    st.error(f"Export failed: {e!s}")
 
         if st.session_state.zip_data:
             st.download_button(

@@ -4,25 +4,25 @@ Run `python main.py` (or `python run.py`) to launch the interactive web applicat
 or specify `--cli` to run headless blueprint generation.
 """
 
-import sys
-import os
 import argparse
+import os
 import subprocess
+import sys
 
 
 def run_streamlit_app():
     """Launches the Streamlit Web Application."""
     app_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "app.py")
-    print(f"🚀 Starting BUILD-MATRIX.ai Web Application...")
+    print("🚀 Starting BUILD-MATRIX.ai Web Application...")
     print(f"📍 App File: {app_path}")
-    print(f"🌐 Opening in your web browser (http://localhost:8501)...\n")
+    print("🌐 Opening in your web browser (http://localhost:8501)...\n")
 
     cmd = [sys.executable, "-m", "streamlit", "run", app_path]
     try:
         subprocess.run(cmd, check=True)
     except KeyboardInterrupt:
         print("\n[!] BUILD-MATRIX.ai Web Application stopped.")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         print(f"\n[!] Error launching application: {e}")
 
 
@@ -48,7 +48,7 @@ def main():
     parser.add_argument("--style", type=str, default="Modern", help="Architectural style")
     parser.add_argument("--output-dir", type=str, default="./output", help="Output directory")
 
-    parsed_args, unknown = parser.parse_known_args()
+    parsed_args, _unknown = parser.parse_known_args()
 
     # If --cli or --prompt is specified, run CLI mode; otherwise default to interactive Streamlit Web App
     if parsed_args.cli or parsed_args.prompt:

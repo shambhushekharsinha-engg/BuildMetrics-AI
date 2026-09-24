@@ -2,29 +2,31 @@
 BuildMetrics AI — FastAPI Backend Service
 Exposes REST endpoints for blueprint generation, 2D/3D rendering, and multi-format export.
 """
-import os
-import uuid
-import time
-import tempfile
-import json
 import logging
-from datetime import datetime, timedelta
-from dataclasses import asdict
+import os
+import tempfile
+import time
+import uuid
+from datetime import datetime, timedelta, timezone
 
 import sentry_sdk
-from sentry_sdk.integrations.fastapi import FastApiIntegration
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, HTMLResponse
 from pythonjsonlogger import jsonlogger
+from sentry_sdk.integrations.fastapi import FastApiIntegration
 
-from build_matrix.schemas import GenerateRequest, Render2DRequest, Render3DRequest, ExportRequest
-from build_matrix.models import PlotDimensions, ArchitecturalStyle, Blueprint2DConfig
-from build_matrix.layout_engine import LayoutEngine
-from build_matrix.input_handler import InputHandler
-from build_matrix.drawing_2d import Blueprint2DRenderer
 from build_matrix.exporter import ExporterEngine
+from build_matrix.input_handler import InputHandler
+from build_matrix.layout_engine import LayoutEngine
+from build_matrix.models import ArchitecturalStyle, Blueprint2DConfig, PlotDimensions
 from build_matrix.rendering_3d import Blueprint3DRenderer
+from build_matrix.schemas import (
+    ExportRequest,
+    GenerateRequest,
+    Render2DRequest,
+    Render3DRequest,
+)
 
 # --- Observability: Sentry ---
 sentry_dsn = os.environ.get("SENTRY_DSN")
@@ -96,7 +98,7 @@ MODEL_STORE: dict = {}
 
 
 def _clean_model_store():
-    cutoff = datetime.now() - timedelta(minutes=30)
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=30)
     expired = [uid for uid, data in MODEL_STORE.items() if data["created_at"] < cutoff]
     for uid in expired:
         del MODEL_STORE[uid]
@@ -134,7 +136,7 @@ def generate_building(req: GenerateRequest):
 
         _clean_model_store()
         building_id = str(uuid.uuid4())
-        MODEL_STORE[building_id] = {"model": model, "created_at": datetime.now()}
+        MODEL_STORE[building_id] = {"model": model, "created_at": datetime.now(timezone.utc)}
 
         from pydantic import TypeAdapter
         serialized_model = TypeAdapter(type(model)).dump_python(model, mode="json")
@@ -143,8 +145,8 @@ def generate_building(req: GenerateRequest):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        logger.error("Generation error: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Generation error:")
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ---------------------------------------------------------------------------
@@ -187,8 +189,8 @@ def render_2d(req: Render2DRequest):
         ExporterEngine.export_2d_png(model, png_path, floor=req.floor, config=config)
         return FileResponse(png_path, media_type="image/png", filename="blueprint.png")
     except Exception as e:
-        logger.error("2D render error: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("2D render error:")
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ---------------------------------------------------------------------------
@@ -253,8 +255,8 @@ def export_file(req: ExportRequest):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error("Export error (sync): %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Export error (sync):")
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ---------------------------------------------------------------------------
@@ -270,15 +272,16 @@ def export_file_async(req: ExportRequest):
     # Lazy import: prevents crash when Redis/Celery not available in local dev
     try:
         from worker import export_model_task
-    except Exception as e:
+    except (ImportError, ModuleNotFoundError) as e:
         logger.warning("Celery worker not available, falling back to sync export: %s", e)
         raise HTTPException(
             status_code=503,
             detail="Background worker unavailable. Use /api/v1/export for synchronous export."
-        )
+        ) from e
 
     model = MODEL_STORE[req.building_id]["model"]
     from pydantic import TypeAdapter
+
     from build_matrix.models import BuildingModel
     model_dict = TypeAdapter(BuildingModel).dump_python(model, mode="json")
     task = export_model_task.delay(model_dict, req.format, req.floor)
@@ -290,9 +293,10 @@ def get_export_status(task_id: str):
     """Poll the status of an async export task."""
     try:
         from celery.result import AsyncResult
+
         from worker import celery_app
-    except Exception as e:
-        raise HTTPException(status_code=503, detail="Background worker unavailable.")
+    except (ImportError, ModuleNotFoundError) as e:
+        raise HTTPException(status_code=503, detail="Background worker unavailable.") from e
 
     res = AsyncResult(task_id, app=celery_app)
     if res.state == "SUCCESS":

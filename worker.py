@@ -1,5 +1,6 @@
 import os
 import tempfile
+
 from celery import Celery
 
 REDIS_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
@@ -31,10 +32,10 @@ if sentry_dsn:
 
 @celery_app.task(name="tasks.export_model")
 def export_model_task(model_dict: dict, format: str, floor: int = 1) -> dict:
-    from build_matrix.models import BuildingModel
-    from build_matrix.exporter import ExporterEngine
-    
     from pydantic import TypeAdapter
+
+    from build_matrix.exporter import ExporterEngine
+    from build_matrix.models import BuildingModel
     model = TypeAdapter(BuildingModel).validate_python(model_dict)
     
     shared_dir = os.environ.get("SHARED_EXPORT_DIR", tempfile.gettempdir())

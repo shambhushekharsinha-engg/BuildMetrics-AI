@@ -1,10 +1,21 @@
-import os
 import json
 import logging
-from datetime import datetime, timedelta
+import os
+from datetime import datetime, timedelta, timezone
+
 import bcrypt
-from sqlalchemy import create_engine, Column, Integer, String, Float, Text, DateTime, ForeignKey
-from sqlalchemy.orm import declarative_base, sessionmaker, scoped_session
+from sqlalchemy import (
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    create_engine,
+)
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import declarative_base, scoped_session, sessionmaker
 from sqlalchemy.pool import QueuePool, SingletonThreadPool
 
 logger = logging.getLogger(__name__)
@@ -53,7 +64,7 @@ class DatabaseRepository:
             session.add(new_user)
             session.commit()
             return True
-        except Exception:
+        except SQLAlchemyError:
             session.rollback()
             return False
         finally:
@@ -67,12 +78,14 @@ class DatabaseRepository:
                 return None, "Invalid credentials"
 
             # Check lockout
-            if user.lockout_until and datetime.now() < user.lockout_until:
-                return None, f"Account locked until {user.lockout_until.strftime('%H:%M:%S')}"
-            elif user.lockout_until:
-                user.failed_attempts = 0
-                user.lockout_until = None
-                session.commit()
+            if user.lockout_until:
+                lockout_end = user.lockout_until.replace(tzinfo=timezone.utc) if user.lockout_until.tzinfo is None else user.lockout_until
+                if datetime.now(timezone.utc) < lockout_end:
+                    return None, f"Account locked until {lockout_end.strftime('%H:%M:%S')}"
+                else:
+                    user.failed_attempts = 0
+                    user.lockout_until = None
+                    session.commit()
 
             # Verify password
             if bcrypt.checkpw(password.encode('utf-8'), user.password_hash.encode('utf-8')):
@@ -83,7 +96,7 @@ class DatabaseRepository:
             else:
                 user.failed_attempts += 1
                 if user.failed_attempts >= 5:
-                    user.lockout_until = datetime.now() + timedelta(minutes=15)
+                    user.lockout_until = datetime.now(timezone.utc) + timedelta(minutes=15)
                     session.commit()
                     return None, "Account locked due to 5 failed attempts (15 min lockout)."
                 session.commit()
@@ -104,9 +117,9 @@ class DatabaseRepository:
             )
             session.add(proj)
             session.commit()
-        except Exception as e:
+        except SQLAlchemyError:
             session.rollback()
-            logger.error("Error saving project: %s", e, exc_info=True)
+            logger.exception("Error saving project")
         finally:
             session.close()
 
@@ -134,7 +147,9 @@ repo = DatabaseRepository()
 def init_db():
     """Runs Alembic migrations programmatically to ensure schema is up to date."""
     import sys
+
     from alembic.config import Config
+
     from alembic import command
 
     # If the database doesn't exist, this will run migrations.
