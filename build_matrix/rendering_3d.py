@@ -1283,7 +1283,7 @@ class Blueprint3DRenderer:
             return group;
         }}
 
-        window.onload = init;
+        init();
     </script>
 </body>
 </html>"""

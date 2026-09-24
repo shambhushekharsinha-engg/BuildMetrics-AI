@@ -334,7 +334,7 @@ class Blueprint2DRenderer:
             self._draw_title_block(ax, building, floor, theme)
 
         ax.set_title(
-            f"BUILD-MATRIX.ai — 2D Architectural Floor Plan ({building.style.value}) — Floor {floor}",
+            f"Buildmetrics-AI — 2D Architectural Floor Plan ({building.style.value}) — Floor {floor}",
             color=theme["text"],
             fontsize=12,
             fontweight="bold",

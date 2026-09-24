@@ -202,7 +202,7 @@ class LabelingManager:
         total_area = building.total_building_area(floor=floor)
 
         return {
-            "PROJECT_TITLE": "BUILD-MATRIX.ai ARCHITECTURAL BLUEPRINT",
+            "PROJECT_TITLE": "Buildmetrics-AI ARCHITECTURAL BLUEPRINT",
             "ARCHITECTURAL_STYLE": building.style.value,
             "FLOOR_LEVEL": f"FLOOR {floor} OF {plot.num_floors}",
             "PLOT_DIMENSIONS": f"{plot.length:.2f}m x {plot.width:.2f}m ({plot.length * plot.width:.2f} m²)",
