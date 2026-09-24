@@ -1,10 +1,13 @@
 import os
 import json
+import logging
 from datetime import datetime, timedelta
 import bcrypt
 from sqlalchemy import create_engine, Column, Integer, String, Float, Text, DateTime, ForeignKey
 from sqlalchemy.orm import declarative_base, sessionmaker, scoped_session
 from sqlalchemy.pool import QueuePool, SingletonThreadPool
+
+logger = logging.getLogger(__name__)
 
 Base = declarative_base()
 
@@ -31,13 +34,13 @@ class DatabaseRepository:
     def __init__(self, db_url=None):
         # 12-factor config fallback to SQLite
         self.db_url = db_url or os.environ.get("DATABASE_URL", "sqlite:///buildmetrics.db")
-        
+
         # Branch correctly for SQLite's thread checking if used
         if self.db_url.startswith("sqlite"):
             self.engine = create_engine(self.db_url, connect_args={"check_same_thread": False}, poolclass=SingletonThreadPool)
         else:
             self.engine = create_engine(self.db_url, poolclass=QueuePool, pool_size=5, max_overflow=10)
-        
+
         self.SessionFactory = scoped_session(sessionmaker(bind=self.engine))
 
     def create_user(self, username, password):
@@ -45,7 +48,6 @@ class DatabaseRepository:
         try:
             if session.query(User).filter_by(username=username).first():
                 return False
-            import bcrypt
             pw_hash = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
             new_user = User(username=username, password_hash=pw_hash)
             session.add(new_user)
@@ -63,7 +65,7 @@ class DatabaseRepository:
             user = session.query(User).filter_by(username=username).first()
             if not user:
                 return None, "Invalid credentials"
-            
+
             # Check lockout
             if user.lockout_until and datetime.now() < user.lockout_until:
                 return None, f"Account locked until {user.lockout_until.strftime('%H:%M:%S')}"
@@ -104,7 +106,7 @@ class DatabaseRepository:
             session.commit()
         except Exception as e:
             session.rollback()
-            print("Error saving project:", e)
+            logger.error("Error saving project: %s", e, exc_info=True)
         finally:
             session.close()
 
@@ -132,10 +134,9 @@ repo = DatabaseRepository()
 def init_db():
     """Runs Alembic migrations programmatically to ensure schema is up to date."""
     import sys
-    import os
     from alembic.config import Config
     from alembic import command
-    
+
     # If the database doesn't exist, this will run migrations.
     # In a real deployed PG environment, we'd run this outside the app, but this keeps Streamlit usage seamless.
     ini_path = os.path.join(os.path.dirname(__file__), "alembic.ini")
@@ -144,7 +145,6 @@ def init_db():
         command.upgrade(alembic_cfg, "head")
     except Exception as e:
         if "pytest" in sys.modules:
-            print(f"Migration error ignored during tests: {e}")
+            logger.warning("Migration error ignored during tests: %s", e)
         else:
             raise RuntimeError(f"Database migration failed. Are you sure 'alembic.ini' exists and DB is accessible? Error: {e}") from e
-
