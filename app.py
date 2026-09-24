@@ -1,16 +1,25 @@
-import requests
-from pydantic import TypeAdapter
 """
 Buildmetrics AI — AI-Powered Architectural Blueprint Generator
 Interactive Web Application powered by Streamlit and Three.js.
 """
-
 import os
 import tempfile
+import time
+import json
+import hashlib
+
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+import requests
+import sentry_sdk
 import streamlit as st
+import streamlit.components.v1 as components
+from pydantic import TypeAdapter
+
+from build_matrix.models import ArchitecturalStyle, Blueprint2DConfig, BuildingModel
+from build_matrix.input_handler import InputHandler
+from build_matrix.exporter import ExporterEngine
 
 st.set_page_config(
     page_title="BuildMetrics AI",
@@ -29,10 +38,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-
-import os
-import sentry_sdk
-
+# Sentry error tracking (optional — only if SENTRY_DSN is set)
 sentry_dsn = os.environ.get("SENTRY_DSN")
 if sentry_dsn:
     sentry_sdk.init(
@@ -40,38 +46,42 @@ if sentry_dsn:
         traces_sample_rate=1.0,
         environment=os.environ.get("ENVIRONMENT", "development")
     )
-import os
+
 API_BASE_URL = os.environ.get("API_BASE_URL", "http://localhost:8000")
-import streamlit.components.v1 as components
-
-from build_matrix.models import ArchitecturalStyle, Blueprint2DConfig, BuildingModel
-from build_matrix.input_handler import InputHandler
-from build_matrix.exporter import ExporterEngine
-
-# Streamlit Page Config handled at top
 
 import db
-db.init_db()  # Replaced with Alembic auto-upgrade
+db.init_db()  # Runs Alembic migrations on startup
 
 @st.cache_data(show_spinner=False)
-def fetch_2d_image_cached(building_id: str, payload: dict):
+def fetch_2d_image_cached(building_id: str, payload_hash: str, payload_json: str):
+    """Fetch 2D blueprint PNG from API. Uses a stable string hash as cache key."""
+    payload = json.loads(payload_json)
     resp = requests.post(
         f"{API_BASE_URL}/api/v1/render/2d",
         json=payload,
-        timeout=15
+        timeout=30
     )
     resp.raise_for_status()
     return resp.content
 
 @st.cache_data(show_spinner=False)
 def fetch_3d_html_cached(building_id: str):
+    """Fetch 3D WebGL HTML from API."""
     resp = requests.post(
         f"{API_BASE_URL}/api/v1/render/3d",
         json={"building_id": building_id},
-        timeout=15
+        timeout=30
     )
     resp.raise_for_status()
     return resp.text
+
+def _check_api_health() -> bool:
+    """Quick liveness check for the FastAPI backend."""
+    try:
+        resp = requests.get(f"{API_BASE_URL}/healthz", timeout=3)
+        return resp.status_code == 200
+    except Exception:
+        return False
 
 if 'user_id' not in st.session_state:
     st.session_state.user_id = None
@@ -187,17 +197,17 @@ with st.sidebar.expander("🤖 Agentic Architect Chat", expanded=False):
 
             try:
                 import google.generativeai as genai
+                genai.configure(api_key=os.environ.get("GEMINI_API_KEY", ""))
                 model = genai.GenerativeModel("gemini-2.5-flash")
-                chat_context = "\\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history])
+                # Use real newlines (not escaped \n literals)
+                chat_context = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history])
                 sys_prompt = f"You are an AI architect. The user is updating a building layout. Current prompt: '{st.session_state.get('prompt_parsed', {}).get('raw_prompt', '')}'. Respond briefly with the new updated prompt instruction based on their request. Do not explain."
-                response = model.generate_content(f"{sys_prompt}\\n\\nChat:\\n{chat_context}")
+                response = model.generate_content(f"{sys_prompt}\n\nChat:\n{chat_context}")
                 new_instruction = response.text.strip()
                 st.session_state.chat_history.append({"role": "assistant", "content": f"Understood. I will redesign based on: {new_instruction}..."})
-                
-                # Capture snapshot before regeneration
+
+                # Capture snapshot before regeneration for diff view
                 if "building_model_cache" in st.session_state:
-                    from pydantic import TypeAdapter
-                    from build_matrix.models import BuildingModel
                     from collections import Counter
                     prev_model = TypeAdapter(BuildingModel).validate_python(st.session_state.building_model_cache)
                     cost_usd = prev_model.boq_estimate.cost_usd if prev_model.boq_estimate else 0
@@ -205,10 +215,10 @@ with st.sidebar.expander("🤖 Agentic Architect Chat", expanded=False):
                     base_days = 90 + (prev_model.plot.num_floors * 45)
                     total_days = base_days + int(base_days * 0.12)
                     compliance_issues = sum(1 for a in prev_model.annotations if a.category == 'compliance_tag' and a.style_props.get('color') == 'red')
-                    
+
                     room_counts = Counter((r.room_type.lower(), r.floor) for r in prev_model.rooms)
                     room_areas = {(r.room_type.lower(), r.floor): r.area for r in prev_model.rooms}
-                    
+
                     st.session_state.pre_gen_snapshot = {
                         "cost": cost_usd,
                         "area": total_built,
@@ -219,13 +229,13 @@ with st.sidebar.expander("🤖 Agentic Architect Chat", expanded=False):
                         "new_instruction": new_instruction
                     }
                     st.session_state.pending_ai_diff = True
-                
-                # Override the manual prompt
+
+                # Override the manual prompt and trigger regeneration
                 st.session_state.ai_override_prompt = new_instruction
                 st.session_state.force_generate = True
                 st.rerun()
             except Exception as e:
-                st.error(f"AI Error: {str(e)}")
+                st.error(f"AI Error: {str(e)}", icon="🤖")
 
 
 if "wd" not in st.session_state:
@@ -442,16 +452,16 @@ if st.session_state.get("pending_ai_diff") and "pre_gen_snapshot" in st.session_
                 if abs(p_area - c_area) > 0.5:
                     room_msgs.append(f"{rtype.title()} (Floor {floor}): {p_area:.1f} m² → {c_area:.1f} m²")
         
-        room_str = "\\n".join(f"- {msg}" for msg in room_msgs) if room_msgs else "- No room changes"
-        
+        room_str = "\n".join(f"- {msg}" for msg in room_msgs) if room_msgs else "- No room changes"
+
         comp_diff = compliance_issues - prev["compliance"]
         comp_diff_str = f"+{comp_diff}" if comp_diff > 0 else f"{comp_diff}" if comp_diff < 0 else "no change"
-        
-        diff_msg = f"**Redesigned based on:** {prev['new_instruction']}\\n\\n"
-        diff_msg += f"**Changes:**\\n{room_str}\\n\\n"
-        diff_msg += f"**Impact:**\\n"
-        diff_msg += f"- **Cost**: ${prev['cost']:,.0f} → ${cost_usd:,.0f} ({cost_diff_str})\\n"
-        diff_msg += f"- **Timeline**: {prev['days']} → {total_days} days ({days_diff_str})\\n"
+
+        diff_msg = f"**Redesigned based on:** {prev['new_instruction']}\n\n"
+        diff_msg += f"**Changes:**\n{room_str}\n\n"
+        diff_msg += "**Impact:**\n"
+        diff_msg += f"- **Cost**: ${prev['cost']:,.0f} → ${cost_usd:,.0f} ({cost_diff_str})\n"
+        diff_msg += f"- **Timeline**: {prev['days']} → {total_days} days ({days_diff_str})\n"
         diff_msg += f"- **Compliance**: {prev['compliance']} → {compliance_issues} violations ({comp_diff_str})"
         
         st.session_state.chat_history[-1] = {"role": "assistant", "content": diff_msg}
@@ -552,8 +562,13 @@ with tab_2d:
                     "theme": config_2d.theme,
                     "floor": selected_floor
                 }
-                img_bytes = fetch_2d_image_cached(st.session_state.building_id, payload)
+                # Use stable JSON string as cache key (avoids UnhashableParamError from dict)
+                payload_json = json.dumps(payload, sort_keys=True)
+                payload_hash = hashlib.md5(payload_json.encode()).hexdigest()
+                img_bytes = fetch_2d_image_cached(st.session_state.building_id, payload_hash, payload_json)
                 st.image(img_bytes, use_container_width=True)
+            except requests.exceptions.ConnectionError:
+                st.error("❌ Cannot reach API server. Is the FastAPI service running on port 8000?")
             except Exception as e:
                 st.error(f"Failed to render 2D blueprint: {e}")
 
@@ -771,6 +786,57 @@ with tab_risk:
 # ---------------------------------------------------------
 # TAB 6: Export Center
 # ---------------------------------------------------------
+
+def _poll_export_task(fmt: str, payload: dict, max_wait_secs: int = 30):
+    """
+    Submit an async export task and poll until done (or timeout).
+    Returns the raw file bytes on success, None on failure/timeout.
+    """
+    resp = requests.post(
+        f"{API_BASE_URL}/api/v1/export/async",
+        json=payload,
+        timeout=15
+    )
+    resp.raise_for_status()
+    result = resp.json()
+
+    # API might fall back to sync export (returns bytes) or task_id (Celery)
+    if "task_id" not in result:
+        # Async endpoint unavailable — try sync instead
+        sync_resp = requests.post(
+            f"{API_BASE_URL}/api/v1/export",
+            json=payload,
+            timeout=60
+        )
+        sync_resp.raise_for_status()
+        return sync_resp.content
+
+    task_id = result["task_id"]
+    deadline = time.time() + max_wait_secs
+
+    while time.time() < deadline:
+        status_resp = requests.get(f"{API_BASE_URL}/api/v1/export/status/{task_id}", timeout=10)
+        status_data = status_resp.json()
+        if status_data["status"] == "SUCCESS":
+            download_url = (
+                f"{API_BASE_URL}/api/v1/download"
+                f"?path={status_data['result']['path']}"
+                f"&filename={status_data['result']['filename']}"
+                f"&media_type={status_data['result']['media_type']}"
+            )
+            return requests.get(download_url, timeout=30).content
+        elif status_data["status"] == "FAILURE":
+            st.error(f"Export failed: {status_data.get('error', 'Unknown Error')}", icon="⚠️")
+            return None
+        time.sleep(1.0)
+
+    st.warning(
+        f"⏱️ Export timed out after {max_wait_secs}s. "
+        "Is the Celery worker running? Check `docker compose ps`."
+    )
+    return None
+
+
 with tab_export:
 
     st.subheader("📥 Export Architectural Blueprints & 3D Assets")
@@ -785,116 +851,56 @@ with tab_export:
         st.markdown("#### 🖼️ 2D PNG Image")
         if "export_png_data" not in st.session_state: st.session_state.export_png_data = None
         if st.button("Generate PNG", key="btn_gen_png"):
-            with st.spinner("Exporting PNG..."):
+            with st.spinner("Exporting PNG via background worker..."):
                 try:
-                    
-                    import time
-                    resp = requests.post(f"{API_BASE_URL}/api/v1/export/async", json={"building_id": st.session_state.building_id, "format": "png", "floor": 1}, timeout=15)
-                    resp.raise_for_status()
-                    task_id = resp.json()["task_id"]
-                    
-                    while True:
-                        status_resp = requests.get(f"{API_BASE_URL}/api/v1/export/status/{task_id}")
-                        status_data = status_resp.json()
-                        if status_data["status"] == "SUCCESS":
-                            download_url = f"{API_BASE_URL}/api/v1/download?path={status_data['result']['path']}&filename={status_data['result']['filename']}&media_type={status_data['result']['media_type']}"
-                            st.session_state.export_png_data = requests.get(download_url).content
-                            break
-                        elif status_data["status"] == "FAILURE":
-                            st.error(f"Export failed: {status_data.get('error', 'Unknown Error')}")
-                            break
-                        time.sleep(1.0)
-
+                    st.session_state.export_png_data = _poll_export_task(
+                        "png", {"building_id": st.session_state.building_id, "format": "png", "floor": 1}
+                    )
                 except Exception as e: st.error(f"Export failed: {e}")
         if st.session_state.export_png_data:
-            st.download_button("Download 2D PNG", st.session_state.export_png_data, file_name="BUILD-MATRIX_2D_Blueprint.png", mime="image/png", use_container_width=True)
+            st.download_button("⬇️ Download 2D PNG", st.session_state.export_png_data, file_name="BUILD-MATRIX_2D_Blueprint.png", mime="image/png", use_container_width=True)
 
     # 2. 2D SVG Export
     with col_e2:
         st.markdown("#### 📐 2D SVG Vector")
         if "export_svg_data" not in st.session_state: st.session_state.export_svg_data = None
         if st.button("Generate SVG", key="btn_gen_svg"):
-            with st.spinner("Exporting SVG..."):
+            with st.spinner("Exporting SVG via background worker..."):
                 try:
-                    
-                    import time
-                    resp = requests.post(f"{API_BASE_URL}/api/v1/export/async", json={"building_id": st.session_state.building_id, "format": "svg", "floor": 1}, timeout=15)
-                    resp.raise_for_status()
-                    task_id = resp.json()["task_id"]
-                    
-                    while True:
-                        status_resp = requests.get(f"{API_BASE_URL}/api/v1/export/status/{task_id}")
-                        status_data = status_resp.json()
-                        if status_data["status"] == "SUCCESS":
-                            download_url = f"{API_BASE_URL}/api/v1/download?path={status_data['result']['path']}&filename={status_data['result']['filename']}&media_type={status_data['result']['media_type']}"
-                            st.session_state.export_svg_data = requests.get(download_url).content
-                            break
-                        elif status_data["status"] == "FAILURE":
-                            st.error(f"Export failed: {status_data.get('error', 'Unknown Error')}")
-                            break
-                        time.sleep(1.0)
-
+                    st.session_state.export_svg_data = _poll_export_task(
+                        "svg", {"building_id": st.session_state.building_id, "format": "svg", "floor": 1}
+                    )
                 except Exception as e: st.error(f"Export failed: {e}")
         if st.session_state.export_svg_data:
-            st.download_button("Download 2D SVG", st.session_state.export_svg_data, file_name="BUILD-MATRIX_2D_Blueprint.svg", mime="image/svg+xml", use_container_width=True)
+            st.download_button("⬇️ Download 2D SVG", st.session_state.export_svg_data, file_name="BUILD-MATRIX_2D_Blueprint.svg", mime="image/svg+xml", use_container_width=True)
 
     # 3. 2D PDF Document
     with col_e3:
         st.markdown("#### 📄 2D PDF Plan")
         if "export_pdf_data" not in st.session_state: st.session_state.export_pdf_data = None
         if st.button("Generate PDF", key="btn_gen_pdf"):
-            with st.spinner("Exporting PDF..."):
+            with st.spinner("Exporting PDF via background worker..."):
                 try:
-                    
-                    import time
-                    resp = requests.post(f"{API_BASE_URL}/api/v1/export/async", json={"building_id": st.session_state.building_id, "format": "pdf", "floor": 1}, timeout=15)
-                    resp.raise_for_status()
-                    task_id = resp.json()["task_id"]
-                    
-                    while True:
-                        status_resp = requests.get(f"{API_BASE_URL}/api/v1/export/status/{task_id}")
-                        status_data = status_resp.json()
-                        if status_data["status"] == "SUCCESS":
-                            download_url = f"{API_BASE_URL}/api/v1/download?path={status_data['result']['path']}&filename={status_data['result']['filename']}&media_type={status_data['result']['media_type']}"
-                            st.session_state.export_pdf_data = requests.get(download_url).content
-                            break
-                        elif status_data["status"] == "FAILURE":
-                            st.error(f"Export failed: {status_data.get('error', 'Unknown Error')}")
-                            break
-                        time.sleep(1.0)
-
+                    st.session_state.export_pdf_data = _poll_export_task(
+                        "pdf", {"building_id": st.session_state.building_id, "format": "pdf", "floor": 1}
+                    )
                 except Exception as e: st.error(f"Export failed: {e}")
         if st.session_state.export_pdf_data:
-            st.download_button("Download 2D PDF", st.session_state.export_pdf_data, file_name="BUILD-MATRIX_2D_Blueprint.pdf", mime="application/pdf", use_container_width=True)
+            st.download_button("⬇️ Download 2D PDF", st.session_state.export_pdf_data, file_name="BUILD-MATRIX_2D_Blueprint.pdf", mime="application/pdf", use_container_width=True)
 
     # 4. 3D OBJ Mesh
     with col_e4:
         st.markdown("#### 🧊 3D OBJ Mesh")
         if "export_obj_data" not in st.session_state: st.session_state.export_obj_data = None
         if st.button("Generate OBJ", key="btn_gen_obj"):
-            with st.spinner("Exporting OBJ..."):
+            with st.spinner("Exporting OBJ via background worker..."):
                 try:
-                    
-                    import time
-                    resp = requests.post(f"{API_BASE_URL}/api/v1/export/async", json={"building_id": st.session_state.building_id, "format": "obj"}, timeout=15)
-                    resp.raise_for_status()
-                    task_id = resp.json()["task_id"]
-                    
-                    while True:
-                        status_resp = requests.get(f"{API_BASE_URL}/api/v1/export/status/{task_id}")
-                        status_data = status_resp.json()
-                        if status_data["status"] == "SUCCESS":
-                            download_url = f"{API_BASE_URL}/api/v1/download?path={status_data['result']['path']}&filename={status_data['result']['filename']}&media_type={status_data['result']['media_type']}"
-                            st.session_state.export_obj_data = requests.get(download_url).content
-                            break
-                        elif status_data["status"] == "FAILURE":
-                            st.error(f"Export failed: {status_data.get('error', 'Unknown Error')}")
-                            break
-                        time.sleep(1.0)
-
+                    st.session_state.export_obj_data = _poll_export_task(
+                        "obj", {"building_id": st.session_state.building_id, "format": "obj", "floor": 1}
+                    )
                 except Exception as e: st.error(f"Export failed: {e}")
         if st.session_state.export_obj_data:
-            st.download_button("Download 3D OBJ", st.session_state.export_obj_data, file_name="BUILD-MATRIX_3D_Model.obj", mime="model/obj", use_container_width=True)
+            st.download_button("⬇️ Download 3D OBJ", st.session_state.export_obj_data, file_name="BUILD-MATRIX_3D_Model.obj", mime="model/obj", use_container_width=True)
 
     st.divider()
 
@@ -905,24 +911,13 @@ with tab_export:
             st.session_state.zip_data = None
 
         if st.button("Generate Complete Package", key="btn_gen_zip"):
-            with st.spinner("Bundling ZIP (via Background Worker)..."):
+            with st.spinner("Bundling ZIP (via Background Worker)... This may take 20-30 seconds."):
                 try:
-                    import time
-                    resp = requests.post(f"{API_BASE_URL}/api/v1/export/async", json={"building_id": st.session_state.building_id, "format": "bundle"}, timeout=15)
-                    resp.raise_for_status()
-                    task_id = resp.json()["task_id"]
-                    
-                    while True:
-                        status_resp = requests.get(f"{API_BASE_URL}/api/v1/export/status/{task_id}")
-                        status_data = status_resp.json()
-                        if status_data["status"] == "SUCCESS":
-                            download_url = f"{API_BASE_URL}/api/v1/download?path={status_data['result']['path']}&filename={status_data['result']['filename']}&media_type={status_data['result']['media_type']}"
-                            st.session_state.zip_data = requests.get(download_url).content
-                            break
-                        elif status_data["status"] == "FAILURE":
-                            st.error(f"Export failed: {status_data.get('error', 'Unknown Error')}")
-                            break
-                        time.sleep(1.0)
+                    st.session_state.zip_data = _poll_export_task(
+                        "bundle",
+                        {"building_id": st.session_state.building_id, "format": "bundle", "floor": 1},
+                        max_wait_secs=60  # ZIP needs more time
+                    )
                 except Exception as e:
                     st.error(f"Export failed: {e}")
 
@@ -935,6 +930,19 @@ with tab_export:
                 use_container_width=True,
             )
 
+    with col_e6:
+        st.markdown("#### ℹ️ Export Notes")
+        st.info(
+            "**Async exports** require the Celery worker to be running.\n\n"
+            "If exports time out, the system automatically falls back to synchronous export.\n\n"
+            "**Docker users**: All services including the worker start with `docker compose up`."
+        )
+
 # --- LEGAL DISCLAIMER ---
 st.markdown("---")
-st.warning("**LEGAL DISCLAIMER:** Outputs are AI-generated preliminaries. They must be reviewed and signed off by a licensed structural engineer or architect before any construction use. Buildmetrics AI assumes no liability for structural integrity.")
+st.warning(
+    "⚠️ **LEGAL DISCLAIMER:** Outputs are AI-generated preliminary estimates. "
+    "They must be reviewed and signed off by a **licensed structural engineer or registered architect** "
+    "before any construction, permitting, or procurement activity. "
+    "BuildMetrics AI assumes no liability for structural integrity or regulatory compliance."
+)
