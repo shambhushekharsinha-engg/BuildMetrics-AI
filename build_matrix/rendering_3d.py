@@ -471,7 +471,7 @@ class Blueprint3DRenderer:
             container.appendChild(renderer.domElement);
             
             // Phase 9: PBR & Sun-path Daylighting
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+            ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
             scene.add(ambientLight);
             
             const sunLight = new THREE.DirectionalLight(0xffeeb1, 1.5);
@@ -524,9 +524,7 @@ class Blueprint3DRenderer:
             controls.target.set(data.plot.length / 2, 0, data.plot.width / 2);
             controls.update();
 
-            // Lighting — assign to outer-scope vars used by setLighting()
-            ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
-            scene.add(ambientLight);
+
 
             dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
             dirLight.position.set(data.plot.length * 2, data.plot.length * 2, data.plot.width * 2);
