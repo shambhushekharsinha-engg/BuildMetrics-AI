@@ -1,5 +1,7 @@
 version: '3.8'
+
 services:
+  # ─── PostgreSQL Database ───────────────────────────────────────────────────
   db:
     image: postgres:15-alpine
     restart: always
@@ -8,16 +10,28 @@ services:
       POSTGRES_PASSWORD: supersecret
       POSTGRES_DB: buildmetrics
     ports:
-    - 5432:5432
+      - "5432:5432"
     volumes:
-    - pgdata:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test:
-      - CMD-SHELL
-      - pg_isready -U buildmetrics
+      test: ["CMD-SHELL", "pg_isready -U buildmetrics"]
       interval: 5s
       timeout: 5s
       retries: 5
+
+  # ─── Redis (Celery Broker + Backend) ──────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    restart: always
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ─── FastAPI Backend ───────────────────────────────────────────────────────
   api:
     build:
       context: .
@@ -25,34 +39,30 @@ services:
     image: buildmetrics-api:latest
     restart: always
     env_file:
-    - .env
+      - .env
     environment:
-    - DATABASE_URL=postgresql://buildmetrics:supersecret@db:5432/buildmetrics
-    - REDIS_URL=redis://redis:6379/0
-    - SHARED_EXPORT_DIR=/app/exports
-    - PYTHONPATH=/app
+      - DATABASE_URL=postgresql://buildmetrics:supersecret@db:5432/buildmetrics
+      - REDIS_URL=redis://redis:6379/0
+      - SHARED_EXPORT_DIR=/app/exports
+      - PYTHONPATH=/app
+      - ENVIRONMENT=production
     ports:
-    - 8000:8000
-    command: 'sh -c "alembic upgrade head && uvicorn api:app --host 0.0.0.0 --port
-      8000"
-
-      '
+      - "8000:8000"
+    command: ["sh", "-c", "alembic upgrade head && uvicorn api:app --host 0.0.0.0 --port 8000"]
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
     healthcheck:
-      test:
-      - CMD
-      - curl
-      - -f
-      - http://localhost:8000/docs
+      test: ["CMD", "curl", "-f", "http://localhost:8000/healthz"]
       interval: 10s
       timeout: 5s
       retries: 3
     volumes:
-    - exports:/app/exports
+      - exports:/app/exports
+
+  # ─── Streamlit Frontend ───────────────────────────────────────────────────
   app:
     build:
       context: .
@@ -60,38 +70,28 @@ services:
     image: buildmetrics-app:latest
     restart: always
     env_file:
-    - .env
+      - .env
     environment:
-    - DATABASE_URL=postgresql://buildmetrics:supersecret@db:5432/buildmetrics
-    - API_BASE_URL=http://api:8000
-    - REDIS_URL=redis://redis:6379/0
-    - PYTHONPATH=/app
+      - DATABASE_URL=postgresql://buildmetrics:supersecret@db:5432/buildmetrics
+      - API_BASE_URL=http://api:8000
+      - REDIS_URL=redis://redis:6379/0
+      - PYTHONPATH=/app
+      - ENVIRONMENT=production
     ports:
-    - 8501:8501
+      - "8501:8501"
     command:
-    - streamlit
-    - run
-    - app.py
-    - --server.port=8501
-    - --server.address=0.0.0.0
+      - streamlit
+      - run
+      - app.py
+      - --server.port=8501
+      - --server.address=0.0.0.0
     depends_on:
       api:
         condition: service_healthy
       redis:
         condition: service_healthy
-  redis:
-    image: redis:7-alpine
-    restart: always
-    ports:
-    - 6379:6379
-    healthcheck:
-      test:
-      - CMD
-      - redis-cli
-      - ping
-      interval: 5s
-      timeout: 5s
-      retries: 5
+
+  # ─── Celery Worker ────────────────────────────────────────────────────────
   worker:
     build:
       context: .
@@ -99,25 +99,32 @@ services:
     image: buildmetrics-worker:latest
     restart: always
     env_file:
-    - .env
+      - .env
     environment:
-    - DATABASE_URL=postgresql://buildmetrics:supersecret@db:5432/buildmetrics
-    - REDIS_URL=redis://redis:6379/0
-    - SHARED_EXPORT_DIR=/app/exports
-    - PYTHONPATH=/app
+      - DATABASE_URL=postgresql://buildmetrics:supersecret@db:5432/buildmetrics
+      - REDIS_URL=redis://redis:6379/0
+      - SHARED_EXPORT_DIR=/app/exports
+      - PYTHONPATH=/app
+      - ENVIRONMENT=production
     command:
-    - celery
-    - -A
-    - worker.celery_app
-    - worker
-    - --loglevel=info
+      - celery
+      - -A
+      - worker.celery_app
+      - worker
+      - --loglevel=info
+      - --concurrency=2
     depends_on:
       db:
         condition: service_healthy
       redis:
         condition: service_healthy
     volumes:
-    - exports:/app/exports
+      - exports:/app/exports
+    deploy:
+      resources:
+        limits:
+          memory: 1g
+
 volumes:
-  pgdata: null
-  exports: null
+  pgdata:
+  exports:
