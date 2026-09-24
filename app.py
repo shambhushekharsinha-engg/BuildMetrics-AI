@@ -46,11 +46,8 @@ if sentry_dsn:
         environment=os.environ.get("ENVIRONMENT", "development")
     )
 
-API_BASE_URL = os.environ.get("API_BASE_URL", "http://localhost:8000")
+API_BASE_URL = os.environ.get("API_BASE_URL") or os.environ.get("API_URL", "http://localhost:8000")
 
-import db
-
-db.init_db()  # Runs Alembic migrations on startup
 
 @st.cache_data(show_spinner=False)
 def fetch_2d_image_cached(building_id: str, payload_hash: str, payload_json: str):
