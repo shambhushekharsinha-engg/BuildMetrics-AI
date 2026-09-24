@@ -46,7 +46,14 @@ if sentry_dsn:
         environment=os.environ.get("ENVIRONMENT", "development")
     )
 
-API_BASE_URL = os.environ.get("API_BASE_URL") or os.environ.get("API_URL", "http://localhost:8000")
+API_BASE_URL = os.environ.get("API_BASE_URL") or os.environ.get("API_URL")
+try:
+    if not API_BASE_URL:
+        API_BASE_URL = st.secrets.get("API_URL") or st.secrets.get("API_BASE_URL")
+except Exception:
+    pass
+if not API_BASE_URL:
+    API_BASE_URL = "http://localhost:8000"
 
 
 @st.cache_data(show_spinner=False)
