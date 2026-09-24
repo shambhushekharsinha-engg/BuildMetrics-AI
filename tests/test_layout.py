@@ -1,7 +1,7 @@
-import pytest
-from build_matrix.models import PlotDimensions, ArchitecturalStyle
-from build_matrix.layout_engine import LayoutEngine
 from build_matrix.input_handler import InputHandler
+from build_matrix.layout_engine import LayoutEngine
+from build_matrix.models import ArchitecturalStyle, PlotDimensions
+
 
 def test_layout_engine_invariants():
     """

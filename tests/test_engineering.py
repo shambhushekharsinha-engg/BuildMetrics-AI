@@ -1,6 +1,14 @@
-import pytest
-from build_matrix.models import BuildingModel, PlotDimensions, StructuralColumnSpec, StructuralBeamSpec, StructuralSlabSpec, WallSpec, WindowSpec
 from build_matrix.engineering import EngineeringEngine
+from build_matrix.models import (
+    BuildingModel,
+    PlotDimensions,
+    StructuralBeamSpec,
+    StructuralColumnSpec,
+    StructuralSlabSpec,
+    WallSpec,
+    WindowSpec,
+)
+
 
 def test_calculate_boq():
     plot = PlotDimensions(length=10.0, width=10.0, num_floors=2, floor_height=3.0)

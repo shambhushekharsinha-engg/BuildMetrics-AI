@@ -1,10 +1,9 @@
 import pytest
-import requests
 from fastapi.testclient import TestClient
 from pydantic import TypeAdapter
-from build_matrix.models import BuildingModel, ArchitecturalStyle
 
 from api import app
+from build_matrix.models import ArchitecturalStyle, BuildingModel
 
 client = TestClient(app)
 

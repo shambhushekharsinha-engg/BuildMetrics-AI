@@ -1,5 +1,9 @@
-import pytest
-from civil_math import calculate_concrete_volume, calculate_steel_weight, calculate_brickwork
+from civil_math import (
+    calculate_brickwork,
+    calculate_concrete_volume,
+    calculate_steel_weight,
+)
+
 
 def test_calculate_concrete_volume():
     vol = calculate_concrete_volume(1000, 1, 0.5)
