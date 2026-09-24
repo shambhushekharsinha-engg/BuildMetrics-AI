@@ -69,7 +69,7 @@ Recorded here so future contributors know why this phase's history has extra scr
   - Fast path: Streamlit Community Cloud, Render, or Fly.io for a hosted single-container deployment.
   - Scale path: AWS ECS/Fargate or GCP Cloud Run behind a load balancer, with the FastAPI backend and Streamlit frontend as separate services.
 - [ ] **HTTPS**: managed TLS certificate via the hosting platform (ACM on AWS, or automatic via Render/Fly/Cloud Run).
-- [x] **Health checks**: `docker-compose.yml` healthchecks confirmed (`pg_isready` for Postgres, `curl /docs` for the FastAPI liveness probe — not a dedicated `/healthz` endpoint, but functionally equivalent and verified working via `depends_on: condition: service_healthy`).
+- [x] **Health checks**: `docker-compose.yml` healthchecks confirmed (`pg_isready` for Postgres, dedicated `/healthz` endpoint on FastAPI for liveness probe — verified working via `depends_on: condition: service_healthy`). CORS now reads from `ALLOWED_ORIGINS` env var instead of hardcoded `*`.
 
 ## Phase 7 — Observability
 
@@ -94,7 +94,7 @@ Recorded here so future contributors know why this phase's history has extra scr
 - [x] **PBR (physically-based rendering) materials** in the Three.js viewer — glass, concrete, brick should respond to light distinctly, not just render as flat differently-colored surfaces.
 - [x] **Sun-path/daylighting simulation**: a time-of-day slider driving a directional light, to visualize shadow and light exposure through the day.
 - [x] **Section/X-ray toggle** and **per-floor isolation** (hide floors above the one being inspected) for actually reviewing multi-floor designs.
-- [ ] **Walkthrough camera mode** alongside the existing orbit control, for a first-person "stand inside the house" view.
+- [x] **Walkthrough camera mode** alongside the existing orbit control, for a first-person "stand inside the house" view. Implemented using Three.js `PointerLockControls` with WASD + mouse look, 1.7m eye height, floor clamping, and ESC-to-exit. Toggle button added to Camera control group. Orbit/walkthrough mode are mutually exclusive (orbit disabled during pointer lock). Fixed `controls` variable scoping bug (was `const` inside `init()`, now assigned to outer-scope `let`).
 - [x] **glTF export** alongside the existing OBJ/STL, since glTF is the modern web/AR standard and opens the door to mobile AR walkthroughs later.
 
 ## Phase 10 — UI/UX Restructuring
@@ -123,3 +123,31 @@ The differentiator against generic AI-render tools (Midjourney-for-houses, etc.)
 
 - [x] Flask confirmed as dead weight and removed from `requirements.txt`; replaced with `fastapi>=0.95.0` and `uvicorn>=0.22.0` — now actually in use as of Phase 3.
 - [x] Confirmed placeholders — removed from the NLP BOQ Standardizer table (see Phase 4).
+
+---
+
+## Production Audit — September 2026
+
+All items in this section were discovered and fixed during the production quality pass (Sept 24, 2026).
+
+### Critical Bugs Fixed
+- [x] **`\n` literal bug** in `app.py` lines 191–193 (AI chat context) and lines 445–455 (diff message): `"\\n"` (two-char literal) replaced with `"\n"` (real Python newline). AI responses were rendering raw `\n` text instead of line breaks.
+- [x] **`cost_engine.py` Streamlit dependency**: `import streamlit as st` and `@st.cache_resource` at module level caused a hard crash when the API server or Celery worker imported `cost_engine`. Fixed by replacing with `functools.lru_cache` and lazy pandas import.
+- [x] **`api.py` top-level Celery import**: `from worker import export_model_task, celery_app` at module level crashed the API server when Redis was offline (e.g., local dev without Docker). Fixed by moving import inside the endpoint function with a graceful 503 fallback.
+- [x] **`docker-compose.yml` malformed YAML**: `command` field for the `api` service had a Python-style multi-line string with a dangling newline, which YAML parses as literal whitespace. Fixed to proper list syntax.
+- [x] **Dockerfile missing `curl`**: Healthcheck uses `curl -f http://localhost:8000/healthz` but `curl` was not installed in the slim runner stage. Added to `apt-get install`.
+
+### High-Priority Fixes
+- [x] **`fetch_2d_image_cached` / `fetch_3d_html_cached`**: both used mutable dict as Streamlit cache key, causing `UnhashableParamError`. Fixed by hashing the payload JSON string (MD5) and passing the stable hash + serialized JSON string as cache keys.
+- [x] **Export polling infinite loop**: all 5 `while True:` export polling loops in `app.py` had no timeout guard. Fixed by extracting a `_poll_export_task()` helper with a configurable `max_wait_secs` deadline and automatic fallback to sync export if Celery returns 503.
+- [x] **`db.py` `print()` call**: `print("Error saving project:", e)` replaced with `logger.error(...)` with `exc_info=True` for full stack traces.
+- [x] **Duplicate `import os` / `import sentry_sdk`**: appeared 3× in `app.py`. Consolidated to a single clean import block at top.
+- [x] **Phase 9 walkthrough camera**: `PointerLockControls` + WASD movement implemented; `controls` variable scoping fixed.
+
+### Polish
+- [x] **`/healthz` endpoint**: added lightweight liveness probe to FastAPI; Docker healthcheck updated from `/docs` to `/healthz`.
+- [x] **CORS configurable**: `api.py` CORS origins now read from `ALLOWED_ORIGINS` env var.
+- [x] **`.env.example`** expanded with `REDIS_URL`, `ALLOWED_ORIGINS`, `ENVIRONMENT`, `SENTRY_DSN`, `SHARED_EXPORT_DIR`.
+- [x] **CI strengthened**: Ruff now fails-fast (removed `continue-on-error: true`), pytest coverage report added (`--cov-fail-under=40`), Docker smoke test calls `/healthz`, upgraded to actions v4.
+- [x] **Test suite expanded**: 22 test cases across `test_api.py` (15) and `test_db.py` (7), covering all sync export formats with magic-byte header validation.
+- [x] **README fully rewritten**: Mermaid architecture diagram, API endpoints table, env vars table, production checklist, roadmap, contributing guide, changelog.
