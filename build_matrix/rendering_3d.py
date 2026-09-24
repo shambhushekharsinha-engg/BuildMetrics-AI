@@ -4,16 +4,22 @@ Extrudes 2D blueprints into 3D volumetric building meshes using Trimesh and gene
 """
 
 import json
+
 import numpy as np
 import trimesh
-from typing import Dict, List, Tuple, Any, Optional
-from .models import BuildingModel, ArchitecturalStyle, RoomSpec, PillarSpec, BeamSpec, WallSpec, StairSpec, FixtureSpec, DoorSpec, WindowSpec
+
+from .models import (
+    ArchitecturalStyle,
+    BuildingModel,
+)
 
 
 class Blueprint3DRenderer:
     """3D mesh builder and interactive WebGL scene generator for architectural models."""
 
-    STYLE_ROOF_TYPES = {
+    import typing
+
+    STYLE_ROOF_TYPES: typing.ClassVar[dict] = {
         ArchitecturalStyle.MODERN: "flat",
         ArchitecturalStyle.MINIMALIST: "flat",
         ArchitecturalStyle.CLASSIC: "gable",

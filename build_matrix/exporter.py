@@ -5,26 +5,25 @@ Exports 2D blueprints to PNG, SVG, PDF and 3D models to OBJ, GLTF, STL, and HTML
 
 import os
 import zipfile
-import io
+
 import matplotlib
+
 matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-import svgwrite
-import trimesh
-from typing import Dict, Any, Optional
-from .models import BuildingModel, Blueprint2DConfig
-from .drawing_2d import Blueprint2DRenderer
-from .rendering_3d import Blueprint3DRenderer
-
-
 import tempfile
+
+import matplotlib.pyplot as plt
+import trimesh
+
+from .drawing_2d import Blueprint2DRenderer
+from .models import Blueprint2DConfig, BuildingModel
+from .rendering_3d import Blueprint3DRenderer
 
 
 class ExporterEngine:
     """Handles multi-format file exports for 2D blueprints and 3D architectural assets."""
 
     @classmethod
-    def export_2d_png(cls, building: BuildingModel, filepath: str, floor: int = 1, config: Optional[Blueprint2DConfig] = None) -> str:
+    def export_2d_png(cls, building: BuildingModel, filepath: str, floor: int = 1, config: Blueprint2DConfig | None = None) -> str:
         """Exports 2D Blueprint to PNG raster file."""
         renderer = Blueprint2DRenderer(config=config)
         fig = renderer.render(building, floor=floor)
@@ -33,7 +32,7 @@ class ExporterEngine:
         return filepath
 
     @classmethod
-    def export_2d_svg(cls, building: BuildingModel, filepath: str, floor: int = 1, config: Optional[Blueprint2DConfig] = None) -> str:
+    def export_2d_svg(cls, building: BuildingModel, filepath: str, floor: int = 1, config: Blueprint2DConfig | None = None) -> str:
         """Exports 2D Blueprint to SVG vector file."""
         renderer = Blueprint2DRenderer(config=config)
         fig = renderer.render(building, floor=floor)
@@ -42,7 +41,7 @@ class ExporterEngine:
         return filepath
 
     @classmethod
-    def export_2d_pdf(cls, building: BuildingModel, filepath: str, floor: int = 1, config: Optional[Blueprint2DConfig] = None) -> str:
+    def export_2d_pdf(cls, building: BuildingModel, filepath: str, floor: int = 1, config: Blueprint2DConfig | None = None) -> str:
         """Exports 2D Blueprint to PDF vector document."""
         renderer = Blueprint2DRenderer(config=config)
         fig = renderer.render(building, floor=floor)

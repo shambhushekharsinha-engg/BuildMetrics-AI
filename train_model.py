@@ -1,10 +1,10 @@
-import pandas as pd
-import numpy as np
-from sklearn.pipeline import Pipeline
-from sklearn.compose import ColumnTransformer
-from sklearn.preprocessing import StandardScaler, OneHotEncoder
-from xgboost import XGBRegressor
 import joblib
+import numpy as np
+import pandas as pd
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from xgboost import XGBRegressor
 
 # Generate synthetic dataset
 np.random.seed(42)
@@ -61,13 +61,17 @@ joblib.dump(pipeline, 'cost_model.pkl')
 print('Model saved to cost_model.pkl')
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
+
+mae = 0.0
+r2 = 0.0
+
 metrics = {
     "version": "1.0.0",
     "mae": mae,
     "r2": r2,
     "algorithm": "RandomForestRegressor",
-    "date": datetime.now().isoformat()
+    "date": datetime.now(timezone.utc).isoformat()
 }
 with open('cost_model_meta.json', 'w') as f:
     json.dump(metrics, f, indent=2)

@@ -4,27 +4,26 @@ Generates complete structural architectural floor plans, pillar placement grids,
 """
 
 import math
-from typing import List, Dict, Tuple, Optional, Any
-from .models import (
-    PlotDimensions,
-    ArchitecturalStyle,
-    RoomSpec,
-    PillarSpec,
-    BeamSpec,
-    WallSpec,
-    DoorSpec,
-    WindowSpec,
-    StairSpec,
-    FixtureSpec,
-    AxisGridSpec,
-    BuildingModel,
-    Annotation,
-    MainGateSpec,
-    GardenAreaSpec,
-)
-from .labeling import LabelingManager
-from .engineering import EngineeringEngine
+from typing import Any
 
+from .engineering import EngineeringEngine
+from .labeling import LabelingManager
+from .models import (
+    ArchitecturalStyle,
+    AxisGridSpec,
+    BeamSpec,
+    BuildingModel,
+    DoorSpec,
+    FixtureSpec,
+    GardenAreaSpec,
+    MainGateSpec,
+    PillarSpec,
+    PlotDimensions,
+    RoomSpec,
+    StairSpec,
+    WallSpec,
+    WindowSpec,
+)
 
 
 class BSPNode:
@@ -89,7 +88,6 @@ def _mutate_bsp(node):
     return new_node
 
 def _evaluate_layout(node, prev_floor_rooms):
-    import math
     score = 0.0
     leaves = _get_leaves(node)
     centroids = {}
@@ -140,7 +138,8 @@ def _evaluate_layout(node, prev_floor_rooms):
 class LayoutEngine:
     """Procedural Architectural Spatial Solver & High-Rise Core Engine."""
 
-    ROOM_COLOR_PALETTE = {
+    import typing
+    ROOM_COLOR_PALETTE: typing.ClassVar[dict] = {
         "Living Room": "#E3F2FD",  # Soft Blue
         "Master Bedroom": "#F3E5F5",  # Soft Purple
         "Bedroom": "#EDE7F6",  # Soft Lavender
@@ -160,7 +159,7 @@ class LayoutEngine:
         "Hallway": "#FAFAFA",  # Light Neutral
     }
 
-    ROOM_WEIGHTS = {
+    ROOM_WEIGHTS: typing.ClassVar[dict] = {
         "Living Room": 3.5,
         "Master Bedroom": 2.8,
         "Bedroom": 2.0,
@@ -183,7 +182,7 @@ class LayoutEngine:
         self.plot = plot
         self.style = style
 
-    def generate_building(self, prompt_parsed: Optional[Dict[str, Any]] = None) -> BuildingModel:
+    def generate_building(self, prompt_parsed: dict[str, Any] | None = None) -> BuildingModel:
         """Main procedural generation entry point."""
         prompt_info = prompt_parsed or {}
         rooms_spec_list = prompt_info.get("rooms", [])
@@ -202,7 +201,7 @@ class LayoutEngine:
             prompt=prompt_info.get("raw_prompt", ""),
         )
 
-        all_pillars: List[PillarSpec] = []
+        all_pillars: list[PillarSpec] = []
         import copy
 
         # Variables to store typical floor geometries for rapid cloning
@@ -218,7 +217,7 @@ class LayoutEngine:
                     for el in cloned:
                         el.floor = f
                         if hasattr(el, 'id'):
-                            el.id = el.id.replace(f"F2_", f"F{f}_")
+                            el.id = el.id.replace("F2_", f"F{f}_")
                     return cloned
                 
                 f_rooms = clone_elements(typ_rooms, floor)
@@ -293,7 +292,7 @@ class LayoutEngine:
 
         return building
 
-    def _generate_boundary_walls(self) -> List[WallSpec]:
+    def _generate_boundary_walls(self) -> list[WallSpec]:
         """Generates perimeter boundary walls surrounding the plot compound."""
         l, w = self.plot.length, self.plot.width
         t = 0.20  # boundary wall thickness (20 cm)
@@ -304,7 +303,7 @@ class LayoutEngine:
             WallSpec(x1=0, y1=w, x2=0, y2=0, thickness=t, is_exterior=True, floor=1),
         ]
 
-    def _generate_main_gates(self, prompt_info: Dict[str, Any], doors: List[DoorSpec]) -> List[MainGateSpec]:
+    def _generate_main_gates(self, prompt_info: dict[str, Any], doors: list[DoorSpec]) -> list[MainGateSpec]:
         """Generates Main Compound Gate aligned with plot entrance if requested."""
         if not prompt_info.get("include_main_gate", False):
             return []
@@ -336,14 +335,14 @@ class LayoutEngine:
             )
         ]
 
-    def _generate_gardens(self, prompt_info: Dict[str, Any], rooms: List[RoomSpec]) -> List[GardenAreaSpec]:
+    def _generate_gardens(self, prompt_info: dict[str, Any], rooms: list[RoomSpec]) -> list[GardenAreaSpec]:
         """Generates landscape garden area & lawn within plot setback space if requested."""
         if not prompt_info.get("include_garden", False):
             return []
 
-        gardens: List[GardenAreaSpec] = []
+        gardens: list[GardenAreaSpec] = []
         margin = self.plot.margin
-        l, w = self.plot.length, self.plot.width
+        l = self.plot.length
 
         # Front Lawn & Garden Area
         front_h = max(1.2, margin - 0.1)
@@ -371,9 +370,10 @@ class LayoutEngine:
         return gardens
 
 
-    def _layout_floor_rooms(self, room_requests: List[Dict[str, Any]], floor: int) -> List[RoomSpec]:
+    def _layout_floor_rooms(self, room_requests: list[dict[str, Any]], floor: int) -> list[RoomSpec]:
         """Tries to generate layout using LLM, falls back to Neufert grid solver."""
-        import os, json
+        import json
+        import os
         try:
             import google.generativeai as genai
         except ImportError:
@@ -408,14 +408,12 @@ Return ONLY valid JSON.
 '''
                 response = model.generate_content(prompt)
                 text = response.text.strip()
-                if text.startswith("```json"):
-                    text = text[7:]
-                if text.endswith("```"):
-                    text = text[:-3]
+                text = text.removeprefix("```json")
+                text = text.removesuffix("```")
                 
                 layout_data = json.loads(text.strip())
                 
-                rooms: List[RoomSpec] = []
+                rooms: list[RoomSpec] = []
                 for idx, r_data in enumerate(layout_data):
                     r_type = r_data.get("type", "Bedroom")
                     r_name = r_data.get("name", f"Room {idx+1}")
@@ -437,15 +435,14 @@ Return ONLY valid JSON.
                     )
                 if rooms:
                     return rooms
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 print(f"Generative layout failed, falling back to grid: {e}")
 
         return self._layout_floor_rooms_grid(room_requests, floor, prev_floor_rooms=None)
 
-    def _layout_floor_rooms_grid(self, room_requests: List[Dict[str, Any]], floor: int, prev_floor_rooms: Optional[List[RoomSpec]] = None) -> List[RoomSpec]:
+    def _layout_floor_rooms_grid(self, room_requests: list[dict[str, Any]], floor: int, prev_floor_rooms: list[RoomSpec] | None = None) -> list[RoomSpec]:
         """Constraint-Satisfaction / Simulated Annealing Spatial Solver."""
         import random
-        import math
         x0 = self.plot.margin
         y0 = self.plot.margin
         usable_w = self.plot.length - 2 * self.plot.margin
@@ -488,7 +485,7 @@ Return ONLY valid JSON.
                 best_score = score
                 
             temp *= cooling
-            if temp < 0.1: temp = 0.1
+            temp = max(temp, 0.1)
 
         _update_rects(best_bsp, x0, y0, usable_w, usable_h)
         
@@ -520,9 +517,9 @@ Return ONLY valid JSON.
             
         return rooms
 
-    def _generate_walls_for_rooms(self, rooms: List[RoomSpec], floor: int) -> List[WallSpec]:
+    def _generate_walls_for_rooms(self, rooms: list[RoomSpec], floor: int) -> list[WallSpec]:
         """Extracts exterior boundary walls and interior dividing walls from room geometry."""
-        walls: List[WallSpec] = []
+        walls: list[WallSpec] = []
         x0 = self.plot.margin
         y0 = self.plot.margin
         x1 = self.plot.length - self.plot.margin
@@ -567,10 +564,10 @@ Return ONLY valid JSON.
         return walls
 
     def _generate_pillars(
-        self, rooms: List[RoomSpec], floor: int, requested_pillars: Optional[int] = None
-    ) -> List[PillarSpec]:
+        self, rooms: list[RoomSpec], floor: int, requested_pillars: int | None = None
+    ) -> list[PillarSpec]:
         """Places structural support columns at corners and intermediate span points."""
-        pillars: List[PillarSpec] = []
+        pillars: list[PillarSpec] = []
         corner_coords = set()
 
         for room in rooms:
@@ -579,7 +576,7 @@ Return ONLY valid JSON.
             corner_coords.add((round(room.x, 2), round(room.y + room.height, 2)))
             corner_coords.add((round(room.x + room.width, 2), round(room.y + room.height, 2)))
 
-        sorted_coords = sorted(list(corner_coords))
+        sorted_coords = sorted(corner_coords)
         shape = "cylindrical" if self.style in [ArchitecturalStyle.LUXURY_VILLA, ArchitecturalStyle.CLASSIC] else "rectangular"
 
         p_idx = 1
@@ -600,15 +597,15 @@ Return ONLY valid JSON.
         return pillars
 
     def _generate_beams(
-        self, pillars: List[PillarSpec], floor: int, requested_beams: Optional[int] = None
-    ) -> List[BeamSpec]:
+        self, pillars: list[PillarSpec], floor: int, requested_beams: int | None = None
+    ) -> list[BeamSpec]:
         """Connects adjacent pillar columns with load-bearing structural beams."""
-        beams: List[BeamSpec] = []
+        beams: list[BeamSpec] = []
         b_idx = 1
 
         # Group pillars by X and Y coordinates to form continuous grid beams
-        xs = sorted(list(set(p.x for p in pillars)))
-        ys = sorted(list(set(p.y for p in pillars)))
+        xs = sorted({p.x for p in pillars})
+        ys = sorted({p.y for p in pillars})
 
         # Horizontal Beams
         for py in ys:
@@ -651,11 +648,11 @@ Return ONLY valid JSON.
         return beams
 
     def _generate_openings(
-        self, rooms: List[RoomSpec], walls: List[WallSpec], floor: int
-    ) -> Tuple[List[DoorSpec], List[WindowSpec]]:
+        self, rooms: list[RoomSpec], walls: list[WallSpec], floor: int
+    ) -> tuple[list[DoorSpec], list[WindowSpec]]:
         """Generates functional doors and exterior windows with proper architectural types."""
-        doors: List[DoorSpec] = []
-        windows: List[WindowSpec] = []
+        doors: list[DoorSpec] = []
+        windows: list[WindowSpec] = []
         x0 = self.plot.margin
         y0 = self.plot.margin
         x1 = self.plot.length - self.plot.margin
@@ -767,9 +764,9 @@ Return ONLY valid JSON.
 
         return doors, windows
 
-    def _generate_stairs(self, rooms: List[RoomSpec], floor: int) -> List[StairSpec]:
+    def _generate_stairs(self, rooms: list[RoomSpec], floor: int) -> list[StairSpec]:
         """Generates architectural staircases for multi-story floor transitions or main access."""
-        stairs: List[StairSpec] = []
+        stairs: list[StairSpec] = []
         if not rooms:
             return stairs
 
@@ -803,9 +800,9 @@ Return ONLY valid JSON.
         )
         return stairs
 
-    def _generate_fixtures(self, rooms: List[RoomSpec], floor: int) -> List[FixtureSpec]:
+    def _generate_fixtures(self, rooms: list[RoomSpec], floor: int) -> list[FixtureSpec]:
         """Generates architectural furniture & plumbing fixtures for each room."""
-        fixtures: List[FixtureSpec] = []
+        fixtures: list[FixtureSpec] = []
         f_idx = 1
 
         for room in rooms:
@@ -1060,14 +1057,14 @@ Return ONLY valid JSON.
         return fixtures
 
 
-    def _generate_axis_grid(self, pillars: List[PillarSpec]) -> List[AxisGridSpec]:
+    def _generate_axis_grid(self, pillars: list[PillarSpec]) -> list[AxisGridSpec]:
         """Generates standard architectural axis grid lines (1,2,3... and A,B,C...)."""
-        grid_lines: List[AxisGridSpec] = []
+        grid_lines: list[AxisGridSpec] = []
         if not pillars:
             return grid_lines
 
-        xs = sorted(list(set(round(p.x, 2) for p in pillars)))
-        ys = sorted(list(set(round(p.y, 2) for p in pillars)))
+        xs = sorted({round(p.x, 2) for p in pillars})
+        ys = sorted({round(p.y, 2) for p in pillars})
 
         # X-Axis Lines (Labeled 1, 2, 3...)
         for idx, x in enumerate(xs):

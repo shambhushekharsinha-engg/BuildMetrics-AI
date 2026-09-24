@@ -3,9 +3,10 @@ BuildMetrics AI — Cost Engine
 Scikit-learn ML-based construction cost prediction.
 No Streamlit dependency: can be imported by API, worker, or Streamlit safely.
 """
-import joblib
 import os
 from functools import lru_cache
+
+import joblib
 
 MODEL_PATH = os.path.join(os.path.dirname(__file__), "cost_model.pkl")
 

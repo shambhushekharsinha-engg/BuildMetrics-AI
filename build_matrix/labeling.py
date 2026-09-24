@@ -3,8 +3,7 @@ BUILD-MATRIX.ai Labeling & Annotation Manager
 Computes structural annotations, room area labels, pillar/beam callouts, dimension lines, compass directions, and title block metadata.
 """
 
-from typing import List, Dict, Tuple, Any
-from .models import BuildingModel, Annotation, RoomSpec, PillarSpec, BeamSpec
+from .models import Annotation, BuildingModel
 
 
 class LabelingManager:
@@ -197,7 +196,7 @@ class LabelingManager:
                 )
 
     @classmethod
-    def get_title_block_data(cls, building: BuildingModel, floor: int = 1) -> Dict[str, str]:
+    def get_title_block_data(cls, building: BuildingModel, floor: int = 1) -> dict[str, str]:
         """Generates standard architectural title block metadata dict."""
         plot = building.plot
         total_area = building.total_building_area(floor=floor)

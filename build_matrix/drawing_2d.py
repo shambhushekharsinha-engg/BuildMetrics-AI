@@ -5,22 +5,26 @@ Draws crisp 2D architectural blueprints complete with wall hatches, pillars, bea
 
 import io
 import math
-import numpy as np
+
 import matplotlib
+import numpy as np
+
 matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-import matplotlib.patches as patches
-import matplotlib.lines as lines
+from typing import Any
+
 import cv2
-from typing import Tuple, Dict, Any, Optional
-from .models import BuildingModel, Blueprint2DConfig, ArchitecturalStyle
+import matplotlib.pyplot as plt
+from matplotlib import patches
+
 from .labeling import LabelingManager
+from .models import Blueprint2DConfig, BuildingModel
 
 
 class Blueprint2DRenderer:
     """High-resolution 2D architectural blueprint vector/raster drawing engine."""
 
-    THEME_COLORS = {
+    import typing
+    THEME_COLORS: typing.ClassVar[dict] = {
         "Classic Blueprint": {
             "bg": "#0D47A1",  # Deep Blueprint Blue
             "grid": "#1976D2",
@@ -126,7 +130,7 @@ class Blueprint2DRenderer:
     }
 
 
-    def __init__(self, config: Optional[Blueprint2DConfig] = None):
+    def __init__(self, config: Blueprint2DConfig | None = None):
         self.config = config or Blueprint2DConfig()
 
     def render(self, building: BuildingModel, floor: int = 1) -> plt.Figure:
@@ -198,7 +202,7 @@ class Blueprint2DRenderer:
                     va="center",
                     fontsize=8,
                     fontweight="bold",
-                    bbox=dict(boxstyle="round,pad=0.3", facecolor=theme["bg"], edgecolor=theme["dim"], alpha=0.75),
+                    bbox={'boxstyle': "round,pad=0.3", 'facecolor': theme["bg"], 'edgecolor': theme["dim"], 'alpha': 0.75},
                     zorder=10,
                 )
 
@@ -321,7 +325,7 @@ class Blueprint2DRenderer:
                     va="center",
                     fontsize=ann.style_props.get("fontsize", 6),
                     fontweight="bold",
-                    bbox=dict(boxstyle="round,pad=0.2", facecolor=color, edgecolor="none", alpha=0.9),
+                    bbox={'boxstyle': "round,pad=0.2", 'facecolor': color, 'edgecolor': "none", 'alpha': 0.9},
                     zorder=25,
                 )
 
@@ -340,7 +344,7 @@ class Blueprint2DRenderer:
         plt.tight_layout()
         return fig
 
-    def _draw_axis_grid(self, ax: plt.Axes, building: BuildingModel, theme: Dict[str, str]) -> None:
+    def _draw_axis_grid(self, ax: plt.Axes, building: BuildingModel, theme: dict[str, str]) -> None:
         """Draws architectural structural axis grid lines and callout bubbles."""
         plot = building.plot
         for grid in building.axis_grids:
@@ -359,7 +363,7 @@ class Blueprint2DRenderer:
                 ax.add_patch(bubble)
                 ax.text(-0.6, grid.position, grid.label, color=theme["text"], fontsize=8, fontweight="bold", ha="center", va="center", zorder=9)
 
-    def _draw_staircase(self, ax: plt.Axes, stair: Any, theme: Dict[str, str]) -> None:
+    def _draw_staircase(self, ax: plt.Axes, stair: Any, theme: dict[str, str]) -> None:
         """Renders detailed 2D architectural staircase drawing with step treads, UP/DN arrow, and railing."""
         sx, sy, sw, sl = stair.x, stair.y, stair.width, stair.length
         # Stair boundary rectangle
@@ -388,7 +392,7 @@ class Blueprint2DRenderer:
             f"{stair.direction.upper()} ({stair.num_steps} R)",
             xy=(arr_x, sy + sl - 0.3),
             xytext=(arr_x, sy + 0.3),
-            arrowprops=dict(facecolor=theme["door"], edgecolor=theme["door"], width=1.5, headwidth=6),
+            arrowprops={'facecolor': theme["door"], 'edgecolor': theme["door"], 'width': 1.5, 'headwidth': 6},
             color=theme["door"],
             fontsize=7,
             fontweight="bold",
@@ -396,7 +400,7 @@ class Blueprint2DRenderer:
             zorder=7,
         )
 
-    def _draw_fixture(self, ax: plt.Axes, fix: Any, theme: Dict[str, str]) -> None:
+    def _draw_fixture(self, ax: plt.Axes, fix: Any, theme: dict[str, str]) -> None:
         """Renders architect CAD symbols for furniture and plumbing fixtures."""
         fx, fy, fw, fh = fix.x, fix.y, fix.width, fix.height
         ftype = fix.fixture_type
@@ -474,7 +478,7 @@ class Blueprint2DRenderer:
                 ax.add_patch(c_top)
                 ax.add_patch(c_bot)
 
-    def _draw_door(self, ax: plt.Axes, door: Any, theme: Dict[str, str]) -> None:
+    def _draw_door(self, ax: plt.Axes, door: Any, theme: dict[str, str]) -> None:
         """Renders architectural doors with wall cutouts, swing arcs, double doors, and sliding doors."""
         dx, dy, dw = door.x, door.y, door.width
         swing = door.swing
@@ -498,7 +502,7 @@ class Blueprint2DRenderer:
                 # Sliding Patio Door (overlapping double glass lines)
                 ax.plot([dx - dw / 2, dx + 0.1], [dy + 0.05, dy + 0.05], color=theme["door"], linewidth=1.5, zorder=7)
                 ax.plot([dx - 0.1, dx + dw / 2], [dy - 0.05, dy - 0.05], color=theme["door"], linewidth=1.5, zorder=7)
-                ax.annotate("", xy=(dx + dw / 2 - 0.2, dy - 0.12), xytext=(dx + 0.2, dy - 0.12), arrowprops=dict(arrowstyle="->", color=theme["door"], lw=0.5), zorder=7)
+                ax.annotate("", xy=(dx + dw / 2 - 0.2, dy - 0.12), xytext=(dx + 0.2, dy - 0.12), arrowprops={'arrowstyle': "->", 'color': theme["door"], 'lw': 0.5}, zorder=7)
 
             else:
                 # Single Swing Door
@@ -512,7 +516,7 @@ class Blueprint2DRenderer:
             arc = patches.Arc((dx, dy - dw / 2), width=2 * dw, height=2 * dw, angle=0, theta1=0, theta2=90, color=theme["door"], linestyle=":", linewidth=0.5, zorder=7)
             ax.add_patch(arc)
 
-    def _draw_window(self, ax: plt.Axes, win: Any, theme: Dict[str, str]) -> None:
+    def _draw_window(self, ax: plt.Axes, win: Any, theme: dict[str, str]) -> None:
         """Renders architectural windows with wall cutout gaps, double glass lines, and jambs."""
         wx, wy, ww = win.x, win.y, win.width
 
@@ -534,14 +538,14 @@ class Blueprint2DRenderer:
 
     def _draw_dimension_line(
 
-        self, ax: plt.Axes, x1: float, y1: float, x2: float, y2: float, label: str, theme: Dict[str, str], vertical: bool = False
+        self, ax: plt.Axes, x1: float, y1: float, x2: float, y2: float, label: str, theme: dict[str, str], vertical: bool = False
     ) -> None:
         """Draws dimension line with extension ticks and text label."""
         ax.annotate(
             "",
             xy=(x2, y2),
             xytext=(x1, y1),
-            arrowprops=dict(arrowstyle="<->", color=theme["dim"], lw=0.5),
+            arrowprops={'arrowstyle': "<->", 'color': theme["dim"], 'lw': 0.5},
         )
         mid_x, mid_y = (x1 + x2) / 2, (y1 + y2) / 2
         rot = 90 if vertical else 0
@@ -555,16 +559,16 @@ class Blueprint2DRenderer:
             ha="center",
             va="center",
             rotation=rot,
-            bbox=dict(boxstyle="square,pad=0.2", facecolor=theme["bg"], edgecolor="none"),
+            bbox={'boxstyle': "square,pad=0.2", 'facecolor': theme["bg"], 'edgecolor': "none"},
         )
 
-    def _draw_compass_rose(self, ax: plt.Axes, cx: float, cy: float, theme: Dict[str, str]) -> None:
+    def _draw_compass_rose(self, ax: plt.Axes, cx: float, cy: float, theme: dict[str, str]) -> None:
         """Draws North Compass Rose."""
         ax.annotate(
             "N",
             xy=(cx, cy + 0.8),
             xytext=(cx, cy - 0.2),
-            arrowprops=dict(facecolor=theme["text"], edgecolor=theme["text"], width=2, headwidth=8),
+            arrowprops={'facecolor': theme["text"], 'edgecolor': theme["text"], 'width': 2, 'headwidth': 8},
             color=theme["text"],
             fontsize=10,
             fontweight="bold",
@@ -573,7 +577,7 @@ class Blueprint2DRenderer:
         circle = patches.Circle((cx, cy + 0.3), radius=0.6, facecolor="none", edgecolor=theme["dim"], linestyle=":")
         ax.add_patch(circle)
 
-    def _draw_title_block(self, ax: plt.Axes, building: BuildingModel, floor: int, theme: Dict[str, str]) -> None:
+    def _draw_title_block(self, ax: plt.Axes, building: BuildingModel, floor: int, theme: dict[str, str]) -> None:
         """Draws professional architectural title block at bottom of blueprint."""
         meta = LabelingManager.get_title_block_data(building, floor=floor)
         
@@ -603,17 +607,17 @@ class Blueprint2DRenderer:
 
         # Content Right: Meta
         import datetime
-        date_str = datetime.datetime.now().strftime("%Y-%m-%d")
+        date_str = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
         ax.text(bx + block_w*0.75, by + 1.4, f"SCALE: {meta['SCALE']} @ A3", color=theme["text"], fontsize=7, fontweight="bold", zorder=22)
-        ax.text(bx + block_w*0.75, by + 0.8, f"DRAWN BY: Buildmetrics Engine", color=theme["dim"], fontsize=6, zorder=22)
+        ax.text(bx + block_w*0.75, by + 0.8, "DRAWN BY: Buildmetrics Engine", color=theme["dim"], fontsize=6, zorder=22)
         ax.text(bx + block_w*0.75, by + 0.3, f"DATE: {date_str}  REV: 01", color=theme["dim"], fontsize=6, zorder=22)
 
-    def _draw_boundary_walls(self, ax: plt.Axes, building: BuildingModel, theme: Dict[str, str]) -> None:
+    def _draw_boundary_walls(self, ax: plt.Axes, building: BuildingModel, theme: dict[str, str]) -> None:
         """Draws boundary compound wall around the plot perimeter."""
         for wall in building.boundary_walls:
             ax.plot([wall.x1, wall.x2], [wall.y1, wall.y2], color=theme["dim"], linewidth=2.2, linestyle="-", zorder=2)
 
-    def _draw_garden_area(self, ax: plt.Axes, building: BuildingModel, theme: Dict[str, str]) -> None:
+    def _draw_garden_area(self, ax: plt.Axes, building: BuildingModel, theme: dict[str, str]) -> None:
         """Draws landscape garden area, grass lawn, paved pathway, and tree CAD symbols."""
         for garden in building.gardens:
             # 1. Grass Lawn Background Fill
@@ -669,11 +673,11 @@ class Blueprint2DRenderer:
                 fontweight="bold",
                 ha="center",
                 va="center",
-                bbox=dict(boxstyle="round,pad=0.2", facecolor=theme["bg"], edgecolor=theme["dim"], alpha=0.8),
+                bbox={'boxstyle': "round,pad=0.2", 'facecolor': theme["bg"], 'edgecolor': theme["dim"], 'alpha': 0.8},
                 zorder=10,
             )
 
-    def _draw_main_gate(self, ax: plt.Axes, gate: Any, theme: Dict[str, str], building: BuildingModel) -> None:
+    def _draw_main_gate(self, ax: plt.Axes, gate: Any, theme: dict[str, str], building: BuildingModel) -> None:
         """Draws architectural Main Compound Gate CAD symbol with pillars, swing arcs/sliding panels, and ENTRANCE arrow."""
         gx, gy, gw = gate.x, gate.y, gate.width
         pw = gate.pillar_width
@@ -694,7 +698,7 @@ class Blueprint2DRenderer:
         if gtype == "sliding":
             ax.plot([gx - gw / 2, gx + 0.2], [gy + 0.1, gy + 0.1], color=theme.get("gate", theme["door"]), linewidth=2.5, zorder=8)
             ax.plot([gx - 0.2, gx + gw / 2], [gy - 0.1, gy - 0.1], color=theme.get("gate", theme["door"]), linewidth=2.5, zorder=8)
-            ax.annotate("", xy=(gx + gw / 2 - 0.3, gy - 0.2), xytext=(gx, gy - 0.2), arrowprops=dict(arrowstyle="->", color=theme.get("gate", theme["door"]), lw=1.5), zorder=8)
+            ax.annotate("", xy=(gx + gw / 2 - 0.3, gy - 0.2), xytext=(gx, gy - 0.2), arrowprops={'arrowstyle': "->", 'color': theme.get("gate", theme["door"]), 'lw': 1.5}, zorder=8)
         else:
             # Double Swing Gate Panels & 90° Swing Arcs
             ax.plot([gx - gw / 2, gx - gw / 2], [gy, gy + half_w], color=theme.get("gate", theme["door"]), linewidth=2.2, zorder=8)
@@ -710,7 +714,7 @@ class Blueprint2DRenderer:
             "MAIN ENTRANCE GATE ↑",
             xy=(gx, gy + 0.8),
             xytext=(gx, gy - 0.8),
-            arrowprops=dict(facecolor=theme["text"], edgecolor=theme["text"], width=2, headwidth=7),
+            arrowprops={'facecolor': theme["text"], 'edgecolor': theme["text"], 'width': 2, 'headwidth': 7},
             color=theme["text"],
             fontsize=8,
             fontweight="bold",

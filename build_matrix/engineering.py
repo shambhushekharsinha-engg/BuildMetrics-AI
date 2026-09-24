@@ -3,21 +3,17 @@ BUILD-MATRIX.ai Structural Engineering & BOQ Cost Estimation Engine
 Calculates IS 456 / ACI 318 structural column/beam/slab reinforcement schedules and Bill of Quantities (BOQ).
 """
 
-from typing import List, Dict, Tuple, Optional
 import math
+
 from .models import (
-    BuildingModel,
-    StructuralColumnSpec,
-    StructuralBeamSpec,
-    StructuralSlabSpec,
-    BOQEstimate,
-    PillarSpec,
-    BeamSpec,
-    WallSpec,
-    WindowSpec,
-    CodeProfile,
     NBC_INDIA_2016,
     Annotation,
+    BOQEstimate,
+    BuildingModel,
+    CodeProfile,
+    StructuralBeamSpec,
+    StructuralColumnSpec,
+    StructuralSlabSpec,
 )
 
 
@@ -118,7 +114,7 @@ class EngineeringEngine:
             tie_spacing = "8mm @ 150mm c/c"
 
         # 1. Generate Structural Columns
-        columns: List[StructuralColumnSpec] = []
+        columns: list[StructuralColumnSpec] = []
         for idx, pillar in enumerate(building.pillars):
             load_capacity = round(600.0 * pillar.floor + (num_floors - pillar.floor + 1) * 350.0, 1)
             columns.append(
@@ -138,7 +134,7 @@ class EngineeringEngine:
             )
 
         # 2. Generate Structural Beams
-        beams: List[StructuralBeamSpec] = []
+        beams: list[StructuralBeamSpec] = []
         for idx, beam in enumerate(building.beams):
             span_len = math.sqrt((beam.x2 - beam.x1) ** 2 + (beam.y2 - beam.y1) ** 2)
             req_depth = max(0.35, round(span_len / 12.0, 2))
@@ -160,7 +156,7 @@ class EngineeringEngine:
             )
 
         # 3. Generate Structural Slabs
-        slabs: List[StructuralSlabSpec] = []
+        slabs: list[StructuralSlabSpec] = []
         for fl in range(1, num_floors + 1):
             slab_thick = 175.0 if num_floors >= 5 else 150.0
             slabs.append(
@@ -247,8 +243,8 @@ class EngineeringEngine:
         
         # Try to use the ML Cost Estimator
         try:
-            import sys
             import os
+            import sys
             # Ensure the current directory is in path to import cost_engine
             sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
             from cost_engine import predict_cost
@@ -265,7 +261,7 @@ class EngineeringEngine:
                 total_usd = round(total_inr / 83.5, 2)
             else:
                 total_inr = round(total_usd * 83.5, 2)
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             print(f"ML cost estimation failed, using rule-based. Error: {e}")
             total_inr = round(total_usd * 83.5, 2)
 

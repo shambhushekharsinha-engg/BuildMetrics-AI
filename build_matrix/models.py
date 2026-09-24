@@ -4,8 +4,8 @@ Defines structural, parametric, and visualization data representations for 2D an
 """
 
 from dataclasses import dataclass, field
-from typing import List, Dict, Tuple, Optional
 from enum import Enum
+
 
 @dataclass
 class CodeProfile:
@@ -128,7 +128,7 @@ class RoomSpec:
     height: float  # Y span in meters
     floor: int = 1
     color: str = "#E8F0FE"
-    target_area: Optional[float] = None
+    target_area: float | None = None
 
     @property
     def area(self) -> float:
@@ -264,32 +264,32 @@ class Annotation:
     y: float
     z: float = 0.0
     category: str = "general"  # 'room_label', 'dimension', 'pillar_tag', 'beam_tag', 'title', 'stair_tag', 'axis_tag', 'gate_tag', 'garden_tag'
-    style_props: Dict = field(default_factory=dict)
+    style_props: dict = field(default_factory=dict)
 
 
 @dataclass
 class BuildingModel:
     plot: PlotDimensions
     style: ArchitecturalStyle = ArchitecturalStyle.MODERN
-    rooms: List[RoomSpec] = field(default_factory=list)
-    pillars: List[PillarSpec] = field(default_factory=list)
-    beams: List[BeamSpec] = field(default_factory=list)
-    walls: List[WallSpec] = field(default_factory=list)
-    boundary_walls: List[WallSpec] = field(default_factory=list)
-    main_gates: List[MainGateSpec] = field(default_factory=list)
-    gardens: List[GardenAreaSpec] = field(default_factory=list)
-    doors: List[DoorSpec] = field(default_factory=list)
-    windows: List[WindowSpec] = field(default_factory=list)
-    stairs: List[StairSpec] = field(default_factory=list)
-    fixtures: List[FixtureSpec] = field(default_factory=list)
-    axis_grids: List[AxisGridSpec] = field(default_factory=list)
-    annotations: List[Annotation] = field(default_factory=list)
-    structural_columns: List[StructuralColumnSpec] = field(default_factory=list)
-    structural_beams: List[StructuralBeamSpec] = field(default_factory=list)
-    structural_slabs: List[StructuralSlabSpec] = field(default_factory=list)
-    boq_estimate: Optional[BOQEstimate] = None
+    rooms: list[RoomSpec] = field(default_factory=list)
+    pillars: list[PillarSpec] = field(default_factory=list)
+    beams: list[BeamSpec] = field(default_factory=list)
+    walls: list[WallSpec] = field(default_factory=list)
+    boundary_walls: list[WallSpec] = field(default_factory=list)
+    main_gates: list[MainGateSpec] = field(default_factory=list)
+    gardens: list[GardenAreaSpec] = field(default_factory=list)
+    doors: list[DoorSpec] = field(default_factory=list)
+    windows: list[WindowSpec] = field(default_factory=list)
+    stairs: list[StairSpec] = field(default_factory=list)
+    fixtures: list[FixtureSpec] = field(default_factory=list)
+    axis_grids: list[AxisGridSpec] = field(default_factory=list)
+    annotations: list[Annotation] = field(default_factory=list)
+    structural_columns: list[StructuralColumnSpec] = field(default_factory=list)
+    structural_beams: list[StructuralBeamSpec] = field(default_factory=list)
+    structural_slabs: list[StructuralSlabSpec] = field(default_factory=list)
+    boq_estimate: BOQEstimate | None = None
     prompt: str = ""
-    metadata: Dict = field(default_factory=dict)
+    metadata: dict = field(default_factory=dict)
 
     def total_building_area(self, floor: int = 1) -> float:
         return sum(r.area for r in self.rooms if r.floor == floor)

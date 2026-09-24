@@ -1,7 +1,8 @@
 import matplotlib.pyplot as plt
-import matplotlib.patches as patches
-import squarify
 import numpy as np
+import squarify
+from matplotlib import patches
+
 
 def generate_blueprint(area, bedrooms, bathrooms):
     # Base sizes in percentage of total area
@@ -76,7 +77,7 @@ def generate_blueprint(area, bedrooms, bathrooms):
     ax.add_patch(title_block)
     ax.text(
         width*0.05, -height*0.1, 
-        f"PROJECT: BUILDMETRICS AI RESIDENTIAL DESIGN",
+        "PROJECT: BUILDMETRICS AI RESIDENTIAL DESIGN",
         color='white', ha='left', va='center', fontsize=12, fontweight='bold', fontfamily='monospace'
     )
     ax.text(

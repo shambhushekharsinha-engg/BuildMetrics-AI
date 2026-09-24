@@ -3,21 +3,20 @@ BUILD-MATRIX.ai Input Handler & Prompt Parser
 Processes user natural language prompts and numerical plot parameters into structured architectural building configurations.
 """
 
+import json
+import math
 import os
 import re
-import math
-import json
-from typing import Dict, List, Tuple, Any
-from .models import PlotDimensions, ArchitecturalStyle
+from typing import Any
 
-
-
+from .models import ArchitecturalStyle, PlotDimensions
 
 
 class InputHandler:
     """Parses natural language prompts and user plot parameters into normalized architectural constraints."""
 
-    WORD_TO_NUM = {
+    import typing
+    WORD_TO_NUM: typing.ClassVar[dict] = {
         "one": 1, "a": 1, "single": 1,
         "two": 2, "double": 2, "twin": 2,
         "three": 3, "triple": 3,
@@ -26,7 +25,7 @@ class InputHandler:
         "eleven": 11, "twelve": 12,
     }
 
-    STYLE_KEYWORDS = {
+    STYLE_KEYWORDS: typing.ClassVar[dict] = {
         ArchitecturalStyle.MODERN: ["modern", "contemporary", "sleek", "glass", "minimal", "open plan"],
         ArchitecturalStyle.MINIMALIST: ["minimalist", "clean lines", "uncluttered"],
         ArchitecturalStyle.CLASSIC: ["classic", "traditional", "colonial", "georgian", "victorian"],
@@ -40,7 +39,7 @@ class InputHandler:
         ArchitecturalStyle.MEDITERRANEAN: ["mediterranean", "coastal", "spanish", "tuscana", "greek"],
     }
 
-    ROOM_KEYWORDS = {
+    ROOM_KEYWORDS: typing.ClassVar[dict] = {
         "Living Room": ["living", "hall", "lounge", "family room", "great room", "drawing room", "reception"],
         "Master Bedroom": ["master bedroom", "master suite", "primary bedroom", "main bedroom"],
         "Bedroom": ["bedroom", "bed room", "guest room", "nursery", "kids room"],
@@ -59,7 +58,7 @@ class InputHandler:
     }
 
     @classmethod
-    def parse_prompt(cls, prompt: str) -> Dict[str, Any]:
+    def parse_prompt(cls, prompt: str) -> dict[str, Any]:
         """Extract architectural constraints using LLM, or fallback to regex."""
         api_key = os.environ.get("GEMINI_API_KEY")
         if api_key:
@@ -67,9 +66,9 @@ class InputHandler:
                 import google.generativeai as genai
                 genai.configure(api_key=api_key)
                 model = genai.GenerativeModel("gemini-2.5-flash")
-                system_prompt = f'''
+                system_prompt = '''
 You are an expert architectural prompt parser. Extract the following from the user prompt into JSON:
-{{
+{
   "style": "<One of: Modern, Minimalist, Classic / Traditional, Industrial, Brutalist, Luxury Villa, Contemporary, Craftsman, Japandi (Zen Fusion), Scandinavian (Nordic Light), Tropical Eco-Villa, Mediterranean Coastal>",
   "num_floors": <integer>,
   "num_pillars": <integer or null>,
@@ -77,21 +76,19 @@ You are an expert architectural prompt parser. Extract the following from the us
   "explicit_length": <float or null>,
   "explicit_width": <float or null>,
   "rooms": [
-    {{"name": "Room Name (e.g. Master Bedroom, Bedroom 2)", "type": "Room Type (e.g. Master Bedroom, Bedroom, Living Room, Kitchen, Bathroom, Home Office, Balcony / Patio)"}}
+    {"name": "Room Name (e.g. Master Bedroom, Bedroom 2)", "type": "Room Type (e.g. Master Bedroom, Bedroom, Living Room, Kitchen, Bathroom, Home Office, Balcony / Patio)"}
   ],
   "include_main_gate": <boolean>,
   "main_gate_type": "<double_swing, sliding, modern_slat, wrought_iron>",
   "include_garden": <boolean>,
   "garden_type": "<front_lawn, courtyard, wrap_around>"
-}}
+}
 Return ONLY valid JSON.
 '''
                 response = model.generate_content(f"{system_prompt}\nUser Prompt: {prompt}")
                 text = response.text.strip()
-                if text.startswith("```json"):
-                    text = text[7:]
-                if text.endswith("```"):
-                    text = text[:-3]
+                text = text.removeprefix("```json")
+                text = text.removesuffix("```")
                 
                 data = json.loads(text.strip())
                 
@@ -106,13 +103,13 @@ Return ONLY valid JSON.
                 data["raw_prompt"] = prompt
                 
                 return data
-            except Exception as e:
+            except Exception as e:  # noqa: BLE001
                 print(f"LLM parsing failed, falling back to regex. Error: {e}")
         
         return cls._parse_prompt_regex(prompt)
 
     @classmethod
-    def _parse_prompt_regex(cls, prompt: str) -> Dict[str, Any]:
+    def _parse_prompt_regex(cls, prompt: str) -> dict[str, Any]:
         """Extract architectural style, room requirements, floor hints, BHK configuration, area conversions, and layout constraints from prompt text using Regex."""
         prompt_lower = prompt.lower()
 
@@ -125,9 +122,7 @@ Return ONLY valid JSON.
 
         # 2. Dwelling Type & Floor Count Hints
         num_floors = 1
-        if "duplex" in prompt_lower or "townhouse" in prompt_lower:
-            num_floors = 2
-        elif "penthouse" in prompt_lower or "triple" in prompt_lower:
+        if "duplex" in prompt_lower or "townhouse" in prompt_lower or "penthouse" in prompt_lower or "triple" in prompt_lower:
             num_floors = 2
         elif "bungalow" in prompt_lower or "cottage" in prompt_lower:
             num_floors = 1
@@ -164,7 +159,7 @@ Return ONLY valid JSON.
                     pass
 
         # 4. BHK Real Estate Configuration Parsing (e.g., "3 BHK", "2.5 BHK", "1BHK")
-        detected_rooms: List[Dict[str, Any]] = []
+        detected_rooms: list[dict[str, Any]] = []
 
         bhk_match = re.search(r'(\d+(?:\.5)?)\s*bhk', prompt_lower)
         if bhk_match:
