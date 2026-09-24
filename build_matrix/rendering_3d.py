@@ -346,6 +346,7 @@ class Blueprint3DRenderer:
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
 </head>
 <body>
     <div id="ui-panel">
@@ -385,6 +386,16 @@ class Blueprint3DRenderer:
         </div>
 
         <div class="control-group">
+            <label>Camera:</label>
+            <div class="btn-group">
+                <button id="btn-orbit" class="active" onclick="setCameraView('orbit')">Orbit</button>
+                <button id="btn-top" onclick="setCameraView('top')">Top View</button>
+                <button id="btn-front" onclick="setCameraView('front')">Front</button>
+                <button id="btn-walkthrough" onclick="enterWalkthrough()" title="WASD + Mouse to move">🚶 Walkthrough</button>
+            </div>
+        </div>
+
+        <div class="control-group">
             <label>Lighting Setup:</label>
             <div class="btn-group">
                 <button id="btn-light-day" class="active" onclick="setLighting('day')">Daylight</button>
@@ -406,6 +417,9 @@ class Blueprint3DRenderer:
     
     <div id="canvas-container"></div>
     <div id="tooltip" style="display:none; position:absolute; background:rgba(13,17,23,0.95); padding:12px; border:1px solid #58a6ff; border-radius:6px; color:#c9d1d9; font-size:13px; pointer-events:none; z-index:200; box-shadow:0 4px 12px rgba(0,0,0,0.8);"></div>
+    <div id="walkthrough-hint" style="display:none; position:absolute; bottom:20px; left:50%; transform:translateX(-50%); background:rgba(0,0,0,0.8); color:#fff; padding:10px 20px; border-radius:8px; font-size:13px; text-align:center; pointer-events:none; z-index:300; border:1px solid #58a6ff;">
+        🚶 <b>Walkthrough Mode</b> &mdash; WASD / Arrows to move &middot; Mouse to look &middot; <b>ESC</b> to exit
+    </div>
     <script>
         const data = {json_str};
         
@@ -500,11 +514,11 @@ class Blueprint3DRenderer:
             }});
 
 
-            const controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
             controls.target.set(data.plot.length / 2, 0, data.plot.width / 2);
             controls.update();
 
-            // Lighting
+            // Lighting — assign to outer-scope vars used by setLighting()
             ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
             scene.add(ambientLight);
 
@@ -650,6 +664,66 @@ class Blueprint3DRenderer:
             }});
 
             animate();
+        }}
+
+        // --- WALKTHROUGH CAMERA (Phase 9: First-Person PointerLockControls) ---
+        let pointerLockControls = null;
+        let walkthroughActive = false;
+        const walkthroughKeys = {{ w: false, a: false, s: false, d: false, ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false }};
+        let walkthroughVelocity = new THREE.Vector3();
+        const walkthroughSpeed = 0.05;
+        let walkthroughClock = new THREE.Clock();
+        let orbitControlsRef = null;
+
+        function enterWalkthrough() {{
+            if (!pointerLockControls) {{
+                pointerLockControls = new THREE.PointerLockControls(camera, renderer.domElement);
+                scene.add(pointerLockControls.getObject());
+                // Store reference to orbit controls to disable it
+                orbitControlsRef = controls;
+
+                document.addEventListener('keydown', (e) => {{ if (e.code in walkthroughKeys) walkthroughKeys[e.code] = true; }});
+                document.addEventListener('keyup', (e) => {{ if (e.code in walkthroughKeys) walkthroughKeys[e.code] = false; }});
+
+                pointerLockControls.addEventListener('unlock', () => {{
+                    walkthroughActive = false;
+                    if (orbitControlsRef) orbitControlsRef.enabled = true;
+                    document.getElementById('btn-walkthrough').classList.remove('active');
+                    document.getElementById('walkthrough-hint').style.display = 'none';
+                }});
+
+                pointerLockControls.addEventListener('lock', () => {{
+                    walkthroughActive = true;
+                    if (orbitControlsRef) orbitControlsRef.enabled = false;
+                    document.getElementById('walkthrough-hint').style.display = 'block';
+                }});
+            }}
+
+            // Position camera at floor level inside the building
+            camera.position.set(
+                data.plot.length * 0.3,
+                1.7,  // Eye height 1.7m
+                data.plot.width * 0.3
+            );
+            document.getElementById('btn-walkthrough').classList.add('active');
+            pointerLockControls.lock();
+        }}
+
+        function updateWalkthrough(delta) {{
+            if (!walkthroughActive || !pointerLockControls || !pointerLockControls.isLocked) return;
+
+            walkthroughVelocity.x = 0;
+            walkthroughVelocity.z = 0;
+
+            const speed = walkthroughSpeed * (delta / 0.016);
+            if (walkthroughKeys['w'] || walkthroughKeys['ArrowUp']) pointerLockControls.moveForward(speed);
+            if (walkthroughKeys['s'] || walkthroughKeys['ArrowDown']) pointerLockControls.moveForward(-speed);
+            if (walkthroughKeys['a'] || walkthroughKeys['ArrowLeft']) pointerLockControls.moveRight(-speed);
+            if (walkthroughKeys['d'] || walkthroughKeys['ArrowRight']) pointerLockControls.moveRight(speed);
+
+            // Clamp camera to valid floor range
+            const camY = pointerLockControls.getObject().position.y;
+            if (camY < 0.5) pointerLockControls.getObject().position.y = 1.7;
         }}
 
         function buildBuildingScene() {{
@@ -1135,7 +1209,12 @@ class Blueprint3DRenderer:
 
         function animate() {{
             requestAnimationFrame(animate);
-            controls.update();
+            const delta = walkthroughClock.getDelta();
+            if (walkthroughActive) {{
+                updateWalkthrough(delta);
+            }} else {{
+                controls.update();
+            }}
             renderer.render(scene, camera);
         }}
 
