@@ -12,14 +12,10 @@ services:
         value: production
       - key: DATABASE_URL
         # Using SQLite for completely free tier without 90-day expiry of Postgres
-        value: sqlite:///data/buildmetrics.db
+        value: sqlite:///buildmetrics.db
       - key: GEMINI_API_KEY
         sync: false
       - key: ALLOWED_ORIGINS
         # Replace with your Streamlit Community Cloud URL later
         value: "*"
       # REDIS_URL left empty so exports run synchronously (Celery worker isn't feasible on 100% free tier)
-    disk:
-      name: sqlite-data
-      mountPath: /app/data
-      sizeGB: 1
