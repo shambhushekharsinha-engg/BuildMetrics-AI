@@ -121,27 +121,20 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# App Header
-st.markdown('<div class="main-header">📐 Buildmetrics AI</div>', unsafe_allow_html=True)
-st.markdown(
-    '<div class="sub-header">AI-Powered 2D Architectural Blueprints & 3D Structural Visualizations</div>',
-    unsafe_allow_html=True,
-)
-
 # Authentication Check (Blocks access to main app if not logged in)
 if not st.session_state.user_id:
     st.markdown('<div class="main-header" style="text-align: center; margin-top: 50px;">📐 Buildmetrics AI</div>', unsafe_allow_html=True)
     st.markdown(
-        '<div class="sub-header" style="text-align: center; border: none;">Welcome back. Please login to access the architect studio.</div>',
+        '<div class="sub-header" style="text-align: center; border: none;">Welcome to the future of AI-driven architecture. Please log in to continue.</div>',
         unsafe_allow_html=True,
     )
     
     col1, col2, col3 = st.columns([1, 1.2, 1])
     with col2:
-        st.markdown('<div class="metric-card" style="padding: 40px;">', unsafe_allow_html=True)
-        st.markdown("<h3 style='text-align: center; color: var(--primary-color); margin-bottom: 30px;'>User Authentication</h3>", unsafe_allow_html=True)
+        st.markdown('<div class="metric-card" style="padding: 40px; border-left: none; border-top: 3px solid var(--primary-color);">', unsafe_allow_html=True)
+        st.markdown("<h3 style='text-align: center; color: var(--primary-color); margin-bottom: 30px;'>Gateway</h3>", unsafe_allow_html=True)
         
-        tab_login, tab_reg = st.tabs(["🔒 Login", "📝 Create Account"])
+        tab_login, tab_reg, tab_demo = st.tabs(["🔒 Login", "📝 Create Account", "🚀 1-Click Demo"])
         
         with tab_login:
             st.info("💡 **Demo Account:** Username: `demo` | Password: `demo`")
@@ -167,10 +160,24 @@ if not st.session_state.user_id:
                 else:
                     st.warning("Please fill out all fields.")
                     
+        with tab_demo:
+            st.write("Skip the setup and jump straight into the application using our demo environment.")
+            if st.button("Instant Demo Access ⚡", use_container_width=True, type="primary"):
+                st.session_state.user_id = "demo_id_123"
+                st.session_state.username = "demo"
+                st.rerun()
+                    
         st.markdown('</div>', unsafe_allow_html=True)
         
     # STOP execution here if not logged in.
     st.stop()
+
+# App Header (Shown only when logged in)
+st.markdown('<div class="main-header">📐 Buildmetrics AI</div>', unsafe_allow_html=True)
+st.markdown(
+    '<div class="sub-header">AI-Powered 2D Architectural Blueprints & 3D Structural Visualizations</div>',
+    unsafe_allow_html=True,
+)
 
 # --- Main App (Only reached if logged in) ---
 
