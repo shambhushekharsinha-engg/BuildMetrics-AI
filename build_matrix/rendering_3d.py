@@ -364,8 +364,8 @@ class Blueprint3DRenderer:
             <label>Render Mode:</label>
             <div class="btn-group">
                 <button id="btn-blueprint" onclick="setRenderMode('blueprint')">Blueprint Cyan</button>
-                <button id="btn-shaded" onclick="setRenderMode('shaded')">Realistic Shaded</button>
-                <button id="btn-rebar" class="active" onclick="setRenderMode('rebar')">Steel Rods Frame</button>
+                <button id="btn-shaded" class="active" onclick="setRenderMode('shaded')">Realistic Shaded</button>
+                <button id="btn-rebar" onclick="setRenderMode('rebar')">Steel Rods Frame</button>
                 <button id="btn-wireframe" onclick="setRenderMode('wireframe')">Wireframe</button>
             </div>
         </div>
@@ -420,6 +420,11 @@ class Blueprint3DRenderer:
         <div class="legend-item"><div class="legend-color" style="background:#2e7d32;"></div> Garden Lawn & Trees</div>
     </div>
 
+    <div id="webgl-lost-banner" style="display:none; position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); background:rgba(13,17,23,0.96); border:2px solid #ff7b72; border-radius:10px; padding:24px 32px; text-align:center; z-index:500; box-shadow:0 8px 32px rgba(0,0,0,0.8);">
+        <h3 style="margin:0 0 10px 0; color:#ff7b72;">⚠️ 3D Viewport Graphics Reset</h3>
+        <p style="margin:0 0 16px 0; color:#c9d1d9; font-size:13px;">Browser WebGL context was paused to conserve GPU memory.</p>
+        <button onclick="window.location.reload()" style="background:#1f6feb; color:#fff; border:none; padding:8px 20px; border-radius:6px; font-weight:bold; cursor:pointer;">🔄 Reload 3D Viewer</button>
+    </div>
     
     <div id="canvas-container"></div>
     <div id="tooltip" style="display:none; position:absolute; background:rgba(13,17,23,0.95); padding:12px; border:1px solid #58a6ff; border-radius:6px; color:#c9d1d9; font-size:13px; pointer-events:none; z-index:200; box-shadow:0 4px 12px rgba(0,0,0,0.8);"></div>
@@ -442,7 +447,7 @@ class Blueprint3DRenderer:
 
         let materials = {{}};
         const isHighRise = data.plot.floors > 5;
-        let currentMode = isHighRise ? 'shaded' : 'rebar';
+        let currentMode = 'shaded';
         let layerState = {{ 
             stairs: !isHighRise, 
             fixtures: !isHighRise, 
@@ -450,7 +455,7 @@ class Blueprint3DRenderer:
             gate: true, 
             garden: true, 
             boundary: true, 
-            rebar: !isHighRise 
+            rebar: false 
         }};
 
         function init() {{
@@ -461,24 +466,35 @@ class Blueprint3DRenderer:
             camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
             camera.position.set(data.plot.length * 1.4, data.plot.height * 2.2, data.plot.width * 1.6);
 
-            renderer = new THREE.WebGLRenderer({{ antialias: true, alpha: true }});
+            renderer = new THREE.WebGLRenderer({{ antialias: true, alpha: true, powerPreference: 'high-performance' }});
             renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
             renderer.shadowMap.enabled = true;
-            renderer.shadowMap.type = THREE.PCFSoftShadowMap; // Advanced Soft Shadows
-            renderer.toneMapping = THREE.ACESFilmicToneMapping; // Photorealistic tone mapping
+            renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+            renderer.toneMapping = THREE.ACESFilmicToneMapping;
             renderer.toneMappingExposure = 1.0;
             container.appendChild(renderer.domElement);
+
+            // WebGL Context Loss & Recovery handling
+            renderer.domElement.addEventListener('webglcontextlost', (event) => {{
+                event.preventDefault();
+                const banner = document.getElementById('webgl-lost-banner');
+                if (banner) banner.style.display = 'block';
+            }}, false);
+
+            renderer.domElement.addEventListener('webglcontextrestored', () => {{
+                const banner = document.getElementById('webgl-lost-banner');
+                if (banner) banner.style.display = 'none';
+                buildBuildingScene();
+            }}, false);
             
             // Phase 9: PBR & Sun-path Daylighting
-            ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+            ambientLight = new THREE.AmbientLight(0xffffff, 0.55);
             scene.add(ambientLight);
             
-            const sunLight = new THREE.DirectionalLight(0xffeeb1, 1.5);
+            const sunLight = new THREE.DirectionalLight(0xffeeb1, 0.8);
             sunLight.position.set(50, 100, 20);
-            sunLight.castShadow = true;
-            sunLight.shadow.mapSize.width = 2048;
-            sunLight.shadow.mapSize.height = 2048;
+            sunLight.castShadow = false;
             scene.add(sunLight);
             
             // X-Ray / Section Toggle UI Overlay
@@ -529,8 +545,8 @@ class Blueprint3DRenderer:
             dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
             dirLight.position.set(data.plot.length * 2, data.plot.length * 2, data.plot.width * 2);
             dirLight.castShadow = true;
-            dirLight.shadow.mapSize.width = 4096; // High-res shadows
-            dirLight.shadow.mapSize.height = 4096;
+            dirLight.shadow.mapSize.width = 2048;
+            dirLight.shadow.mapSize.height = 2048;
             const d = Math.max(data.plot.length, data.plot.width) * 1.5;
             dirLight.shadow.camera.left = -d;
             dirLight.shadow.camera.right = d;
@@ -824,6 +840,7 @@ class Blueprint3DRenderer:
                 const midY = (d.floor - 1) * floorH + 1.05;
                 mesh.position.set(d.x, midY, d.y);
                 if (d.orient === 'vertical') mesh.rotation.y = Math.PI / 2;
+                mesh.userData = {{ type: "Door", floor: d.floor }};
                 buildingGroup.add(mesh);
             }});
 
@@ -834,6 +851,7 @@ class Blueprint3DRenderer:
                 const midY = (w.floor - 1) * floorH + 1.6;
                 mesh.position.set(w.x, midY, w.y);
                 if (w.orient === 'vertical') mesh.rotation.y = Math.PI / 2;
+                mesh.userData = {{ type: "Window", floor: w.floor }};
                 buildingGroup.add(mesh);
             }});
 
@@ -853,6 +871,7 @@ class Blueprint3DRenderer:
                     const stepZ = s.y + i * stepDy + stepDy / 2;
                     const stepY = floorY0 + stepH / 2;
                     mesh.position.set(s.x + s.w / 2, stepY, stepZ);
+                    mesh.userData = {{ floor: s.floor }};
                     stairsGroup.add(mesh);
                 }}
             }});
@@ -862,6 +881,7 @@ class Blueprint3DRenderer:
                 const mesh = createFixtureMesh(f, currentMode, materials);
                 const midY = (f.floor - 1) * floorH;
                 mesh.position.set(f.x, midY, f.y);
+                mesh.userData = {{ floor: f.floor }};
                 fixturesGroup.add(mesh);
             }});
 
@@ -947,11 +967,13 @@ class Blueprint3DRenderer:
                 }});
             }}
 
-            // 11. Steel Rods Reinforcement Frame (3D Rebar Cages)
+            // 11. Steel Rods Reinforcement Frame (3D Rebar Cages) - Built lazily when rebar mode is active
             rebarGroup.clear();
-            rebarGroup.visible = layerState.rebar;
+            rebarGroup.visible = (currentMode === 'rebar' || layerState.rebar);
+            if (!rebarGroup.visible) return;
             
             // Rebar Columns (Pillar Cages)
+            const sharedMainRodGeom = new THREE.CylinderGeometry(0.016, 0.016, floorH, 6);
             data.pillars.forEach(p => {{
                 const pillarH = floorH;
                 const floorY0 = (p.floor - 1) * floorH;
@@ -959,8 +981,6 @@ class Blueprint3DRenderer:
                 const rw = (p.w / 2) - cover;
                 const rh = (p.h / 2) - cover;
 
-                // Main Vertical TMT Steel Rods (Corner & Side Rods)
-                const mainRodGeom = new THREE.CylinderGeometry(0.016, 0.016, pillarH, 8);
                 const cornerOffsets = [
                     [-rw, -rh], [rw, -rh], [rw, rh], [-rw, rh]
                 ];
@@ -969,17 +989,16 @@ class Blueprint3DRenderer:
                 }}
 
                 cornerOffsets.forEach(off => {{
-                    const rod = new THREE.Mesh(mainRodGeom, materials.steel_rod);
+                    const rod = new THREE.Mesh(sharedMainRodGeom, materials.steel_rod);
                     rod.position.set(p.x + off[0], floorY0 + pillarH / 2, p.y + off[1]);
                     rebarGroup.add(rod);
                 }});
 
-                // Lateral Hoop Stirrup Ties (Spaced every 22cm)
-                const numStirrups = Math.floor(pillarH / 0.22);
+                // Lateral Hoop Stirrup Ties (Spaced every 35cm to keep geometry count optimal)
+                const numStirrups = Math.floor(pillarH / 0.35);
+                const tieGeom = new THREE.BoxGeometry(p.w - cover * 2, 0.01, p.h - cover * 2);
                 for (let s = 1; s <= numStirrups; s++) {{
-                    const tieY = floorY0 + s * 0.22;
-                    // Stirrup Ring Box Frame
-                    const tieGeom = new THREE.BoxGeometry(p.w - cover * 2, 0.01, p.h - cover * 2);
+                    const tieY = floorY0 + s * 0.35;
                     const tieMesh = new THREE.Mesh(tieGeom, materials.steel_stirrup);
                     tieMesh.position.set(p.x, tieY, p.y);
                     rebarGroup.add(tieMesh);
@@ -1000,7 +1019,7 @@ class Blueprint3DRenderer:
                 const cover = 0.035;
 
                 // Longitudinal Steel Rods (2 Top, 2 Bottom)
-                const mainBeamRodGeom = new THREE.CylinderGeometry(0.014, 0.014, span, 8);
+                const mainBeamRodGeom = new THREE.CylinderGeometry(0.014, 0.014, span, 6);
                 const rodOffsets = [
                     [-(b.w / 2 - cover), (b.d / 2 - cover)],
                     [(b.w / 2 - cover), (b.d / 2 - cover)],
@@ -1016,13 +1035,13 @@ class Blueprint3DRenderer:
                     rebarGroup.add(rod);
                 }});
 
-                // Beam Shear Stirrup Rings (Spaced every 20cm)
-                const numBeamStirrups = Math.floor(span / 0.20);
+                // Beam Shear Stirrup Rings (Spaced every 35cm)
+                const numBeamStirrups = Math.floor(span / 0.35);
+                const stirrupGeom = new THREE.BoxGeometry(b.w - cover * 2, b.d - cover * 2, 0.01);
                 for (let s = 1; s <= numBeamStirrups; s++) {{
-                    const tieDist = s * 0.20 - span / 2;
+                    const tieDist = s * 0.35 - span / 2;
                     const tieX = midX + tieDist * Math.cos(angle);
                     const tieZ = midZ + tieDist * Math.sin(angle);
-                    const stirrupGeom = new THREE.BoxGeometry(b.w - cover * 2, b.d - cover * 2, 0.01);
                     const stirrupMesh = new THREE.Mesh(stirrupGeom, materials.steel_stirrup);
                     stirrupMesh.position.set(tieX, floorY0, tieZ);
                     stirrupMesh.rotation.y = -angle;
@@ -1031,112 +1050,38 @@ class Blueprint3DRenderer:
             }});
 
             // Slab Rebar Mesh Grids
+            const xRodGeom = new THREE.CylinderGeometry(0.008, 0.008, data.plot.length, 6);
+            const zRodGeom = new THREE.CylinderGeometry(0.008, 0.008, data.plot.width, 6);
             for (let fl = 1; fl <= data.plot.floors; fl++) {{
                 const slabY = fl * floorH;
-                const meshSpacing = 0.6;
-                // Longitudinal X Rods
+                const meshSpacing = 1.0;
                 for (let sz = 0.5; sz < data.plot.width; sz += meshSpacing) {{
-                    const xRodGeom = new THREE.CylinderGeometry(0.008, 0.008, data.plot.length, 6);
                     const xRod = new THREE.Mesh(xRodGeom, materials.steel_mesh);
                     xRod.position.set(data.plot.length / 2, slabY - 0.05, sz);
                     xRod.rotation.z = Math.PI / 2;
                     rebarGroup.add(xRod);
                 }}
-                // Transverse Z Rods
                 for (let sx = 0.5; sx < data.plot.length; sx += meshSpacing) {{
-                    const zRodGeom = new THREE.CylinderGeometry(0.008, 0.008, data.plot.width, 6);
                     const zRod = new THREE.Mesh(zRodGeom, materials.steel_mesh);
                     zRod.position.set(sx, slabY - 0.04, data.plot.width / 2);
                     zRod.rotation.x = Math.PI / 2;
                     rebarGroup.add(zRod);
                 }}
             }}
-
-            // Wall Rebar Reinforcement Mesh (Vertical & Horizontal Tie Rods for all walls)
-            data.walls.forEach(w => {{
-                const dx = w.x2 - w.x1;
-                const dy = w.y2 - w.y1;
-                const len = Math.hypot(dx, dy);
-                if (len < 0.05) return;
-
-                const angle = Math.atan2(dy, dx);
-                const floorY0 = (w.floor - 1) * floorH;
-                const midX = (w.x1 + w.x2) / 2;
-                const midZ = (w.y1 + w.y2) / 2;
-                const rodSpacing = 0.45;
-
-                // Vertical Wall Steel Rods
-                const numVert = Math.floor(len / rodSpacing);
-                for (let i = 0; i <= numVert; i++) {{
-                    const dist = i * rodSpacing - len / 2;
-                    const rx = midX + dist * Math.cos(angle);
-                    const rz = midZ + dist * Math.sin(angle);
-                    const vRodGeom = new THREE.CylinderGeometry(0.008, 0.008, floorH, 6);
-                    const vRod = new THREE.Mesh(vRodGeom, materials.steel_rod);
-                    vRod.position.set(rx, floorY0 + floorH / 2, rz);
-                    rebarGroup.add(vRod);
-                }}
-
-                // Horizontal Wall Tie Rods
-                const numHoriz = Math.floor(floorH / rodSpacing);
-                for (let j = 1; j <= numHoriz; j++) {{
-                    const ry = floorY0 + j * rodSpacing;
-                    const hRodGeom = new THREE.CylinderGeometry(0.007, 0.007, len, 6);
-                    const hRod = new THREE.Mesh(hRodGeom, materials.steel_stirrup);
-                    hRod.position.set(midX, ry, midZ);
-                    hRod.rotation.y = -angle;
-                    hRod.rotation.z = Math.PI / 2;
-                    rebarGroup.add(hRod);
-                }}
-            }});
-
-            // Rebar Boundary Wall Framework
-            if (data.boundary_walls) {{
-                data.boundary_walls.forEach(bw => {{
-                    const dx = bw.x2 - bw.x1;
-                    const dy = bw.y2 - bw.y1;
-                    const len = Math.hypot(dx, dy);
-                    if (len < 0.05) return;
-                    const angle = Math.atan2(dy, dx);
-                    const midX = (bw.x1 + bw.x2) / 2;
-                    const midZ = (bw.y1 + bw.y2) / 2;
-
-                    const numPosts = Math.floor(len / 0.5);
-                    for (let p = 0; p <= numPosts; p++) {{
-                        const dist = p * 0.5 - len / 2;
-                        const px = midX + dist * Math.cos(angle);
-                        const pz = midZ + dist * Math.sin(angle);
-                        const postGeom = new THREE.CylinderGeometry(0.01, 0.01, 2.0, 6);
-                        const post = new THREE.Mesh(postGeom, materials.steel_rod);
-                        post.position.set(px, 1.0, pz);
-                        rebarGroup.add(post);
-                    }}
-                }});
-            }}
-
-            // Rebar Main Gate Framework
-            if (data.main_gates) {{
-                data.main_gates.forEach(g => {{
-                    const gh = g.h || 2.2;
-                    const numGateBars = Math.floor(g.w / 0.18);
-                    for (let gb = 0; gb <= numGateBars; gb++) {{
-                        const gbx = (g.x - g.w / 2) + gb * 0.18;
-                        const gBarGeom = new THREE.CylinderGeometry(0.012, 0.012, gh, 8);
-                        const gBar = new THREE.Mesh(gBarGeom, materials.steel_rod);
-                        gBar.position.set(gbx, gh / 2, g.y);
-                        rebarGroup.add(gBar);
-                    }}
-                }});
-            }}
         }}
 
         function setRenderMode(mode) {{
             currentMode = mode;
-            document.querySelectorAll('.control-group button').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.control-group button[id^="btn-"]').forEach(b => {{
+                if (['btn-blueprint', 'btn-shaded', 'btn-rebar', 'btn-wireframe'].includes(b.id)) {{
+                    b.classList.remove('active');
+                }}
+            }});
             const activeBtn = document.getElementById('btn-' + mode);
             if (activeBtn) activeBtn.classList.add('active');
 
             if (mode === 'rebar') {{
+                layerState.rebar = true;
                 buildingGroup.visible = false;
                 stairsGroup.visible = false;
                 fixturesGroup.visible = false;
@@ -1144,8 +1089,9 @@ class Blueprint3DRenderer:
                 boundaryGroup.visible = false;
                 gateGroup.visible = false;
                 gardenGroup.visible = false;
-                rebarGroup.visible = layerState.rebar;
+                rebarGroup.visible = true;
             }} else {{
+                layerState.rebar = false;
                 buildingGroup.visible = true;
                 stairsGroup.visible = layerState.stairs;
                 fixturesGroup.visible = layerState.fixtures;
@@ -1153,7 +1099,7 @@ class Blueprint3DRenderer:
                 boundaryGroup.visible = layerState.boundary;
                 gateGroup.visible = layerState.gate;
                 gardenGroup.visible = layerState.garden;
-                rebarGroup.visible = layerState.rebar;
+                rebarGroup.visible = false;
             }}
             buildBuildingScene();
         }}
@@ -1197,12 +1143,19 @@ class Blueprint3DRenderer:
 
         function setFloorFilter(floor) {{
             document.querySelectorAll('#ui-panel button[id^="btn-f"]').forEach(b => b.classList.remove('active'));
-            document.getElementById('btn-f' + floor).classList.add('active');
+            const fBtn = document.getElementById('btn-f' + floor);
+            if (fBtn) fBtn.classList.add('active');
             
             buildingGroup.children.forEach(c => {{
-                c.visible = (floor === 0);
+                c.visible = (floor === 0) || (!c.userData || !c.userData.floor || c.userData.floor === floor);
             }});
-            if (floor === 0) buildBuildingScene();
+            stairsGroup.children.forEach(c => {{
+                c.visible = (floor === 0) || (!c.userData || !c.userData.floor || c.userData.floor === floor);
+            }});
+            fixturesGroup.children.forEach(c => {{
+                c.visible = (floor === 0) || (!c.userData || !c.userData.floor || c.userData.floor === floor);
+            }});
+            roofGroup.visible = (floor === 0) ? layerState.roof : false;
         }}
 
         function onWindowResize() {{

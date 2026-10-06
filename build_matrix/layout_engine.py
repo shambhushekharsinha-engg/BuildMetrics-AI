@@ -87,27 +87,74 @@ def _mutate_bsp(node):
         target.left, target.right = target.right, target.left
     return new_node
 
+_DEFAULT_ROOM_WEIGHTS = {
+    "living": 3.5,
+    "master bedroom": 2.8,
+    "bedroom": 2.2,
+    "kitchen": 1.6,
+    "dining": 1.8,
+    "home theater": 2.2,
+    "gym": 1.8,
+    "garage": 2.5,
+    "elevator": 1.2,
+    "office": 1.6,
+    "study": 1.5,
+    "balcony": 1.0,
+    "patio": 1.0,
+    "bathroom": 0.8,
+    "laundry": 0.8,
+    "store": 0.7,
+    "prayer": 0.7,
+    "courtyard": 1.8,
+}
+
+def _get_room_weight(rtype_str: str) -> float:
+    rt = rtype_str.lower()
+    for k, val in _DEFAULT_ROOM_WEIGHTS.items():
+        if k in rt:
+            return val
+    return 1.5
+
 def _evaluate_layout(node, prev_floor_rooms):
     score = 0.0
     leaves = _get_leaves(node)
     centroids = {}
     
+    total_area = sum(leaf.rect[2] * leaf.rect[3] for leaf in leaves)
+    total_weight = sum(_get_room_weight(leaf.room.get("type", leaf.room.get("name", "Bedroom"))) for leaf in leaves)
+    
     for leaf in leaves:
         x, y, w, h = leaf.rect
+        area = w * h
         centroids[leaf.room["id"]] = (x + w/2, y + h/2)
-        rtype = leaf.room.get("type", "Bedroom").lower()
+        rtype = (leaf.room.get("type", "") + " " + leaf.room.get("name", "Bedroom")).lower()
         min_w, min_h = 2.0, 2.0
-        if "bedroom" in rtype: min_w, min_h = 2.4, 2.5
-        elif "kitchen" in rtype: min_w, min_h = 1.8, 2.0
-        elif "bathroom" in rtype: min_w, min_h = 1.4, 1.6
-        elif "living" in rtype: min_w, min_h = 3.0, 3.0
+        if "bedroom" in rtype: min_w, min_h = 2.8, 3.0
+        elif "kitchen" in rtype: min_w, min_h = 2.2, 2.4
+        elif "bathroom" in rtype: min_w, min_h = 1.5, 1.8
+        elif "living" in rtype: min_w, min_h = 3.5, 3.5
         
-        if w < min_w: score -= (min_w - w) * 100
-        if h < min_h: score -= (min_h - h) * 100
+        if w < min_w: score -= (min_w - w) * 120
+        if h < min_h: score -= (min_h - h) * 120
         
-        aspect = max(w/h, h/w)
-        if aspect > 3.0:
-            score -= (aspect - 3.0) * 50
+        # Target area proportionality penalty
+        if total_area > 0 and total_weight > 0:
+            weight = _get_room_weight(rtype)
+            target_share = weight / total_weight
+            actual_share = area / total_area
+            score -= abs(actual_share - target_share) * 400
+            
+            # Cap balcony/bathroom/kitchen from dominating floor area
+            if ("balcony" in rtype or "patio" in rtype) and actual_share > 0.18:
+                score -= (actual_share - 0.18) * 800
+            if "bathroom" in rtype and actual_share > 0.15:
+                score -= (actual_share - 0.15) * 800
+            if "kitchen" in rtype and actual_share > 0.22:
+                score -= (actual_share - 0.22) * 600
+        
+        aspect = max(w/h, h/w) if min(w, h) > 0.01 else 10.0
+        if aspect > 2.5:
+            score -= (aspect - 2.5) * 60
         
         if prev_floor_rooms and ("bathroom" in rtype or "kitchen" in rtype):
             for pr in prev_floor_rooms:

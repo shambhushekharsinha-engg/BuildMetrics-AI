@@ -343,7 +343,7 @@ def list_models():
 
 if _RATE_LIMIT_AVAILABLE:
     @app.post("/api/v1/generate", tags=["blueprint"])
-    @limiter.limit("10/minute")
+    @limiter.limit("60/minute")
     def generate_building(request: Request, req: GenerateRequest):
         """Generate a complete building model from a natural-language prompt."""
         return _generate_building_impl(req)
@@ -454,7 +454,7 @@ def render_3d(req: Render3DRequest):
 
 if _RATE_LIMIT_AVAILABLE:
     @app.post("/api/v1/export", tags=["export"])
-    @limiter.limit("5/minute")
+    @limiter.limit("60/minute")
     def export_file(request: Request, req: ExportRequest):
         """Export the building in the requested format (synchronous)."""
         return _export_file_impl(req)
@@ -514,27 +514,26 @@ def _export_file_impl(req: ExportRequest):
 
 @app.post("/api/v1/export/async", tags=["export"])
 def export_file_async(req: ExportRequest):
-    """Queue an export task via Celery (returns task_id for polling)."""
+    """Queue an export task via Celery (returns task_id for polling, or fallback_sync if unavailable)."""
     model = model_store.get(req.building_id)
     if model is None:
         raise HTTPException(status_code=404, detail="Building model not found. Please regenerate.")
 
+    if not getattr(model_store, "_use_redis", False):
+        return {"fallback_sync": True}
+
     # Lazy import: prevents crash when Redis/Celery not available in local dev
     try:
+        from pydantic import TypeAdapter
+        from build_matrix.models import BuildingModel
         from worker import export_model_task
-    except (ImportError, ModuleNotFoundError) as e:
-        logger.warning("Celery worker not available, falling back to sync export: %s", e)
-        raise HTTPException(
-            status_code=503,
-            detail="Background worker unavailable. Use /api/v1/export for synchronous export."
-        ) from e
 
-    from pydantic import TypeAdapter
-
-    from build_matrix.models import BuildingModel
-    model_dict = TypeAdapter(BuildingModel).dump_python(model, mode="json")
-    task = export_model_task.delay(model_dict, req.format, req.floor)
-    return {"task_id": task.id}
+        model_dict = TypeAdapter(BuildingModel).dump_python(model, mode="json")
+        task = export_model_task.delay(model_dict, req.format, req.floor)
+        return {"task_id": task.id}
+    except Exception as e:
+        logger.warning("Celery worker unavailable, instructing client to use sync export: %s", e)
+        return {"fallback_sync": True}
 
 
 @app.get("/api/v1/export/status/{task_id}", tags=["export"])

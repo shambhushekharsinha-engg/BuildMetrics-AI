@@ -148,6 +148,11 @@ else:
         .metric-card h4 { color: #475569; } .metric-card h2 { color: #1E293B; }
     '''
 st.markdown(f'<style>{_theme_css}</style>', unsafe_allow_html=True)
+try:
+    from ui_styles import inject_accessibility_css
+    st.markdown(inject_accessibility_css(), unsafe_allow_html=True)
+except Exception:
+    pass
 
 # Authentication Check (Blocks access to main app if not logged in)
 if not st.session_state.user_id:
@@ -257,13 +262,13 @@ if "session_expiry" in st.session_state and __import__("time").time() > st.sessi
 st.session_state.session_expiry = __import__("time").time() + 3600
 
 
-with st.sidebar.expander("🤖 Agentic Architect Chat", expanded=False):
-    st.caption("Talk to the AI architect to dynamically alter the blueprint.")
+with st.sidebar.expander("🤖 Agentic Architect Chat", expanded=True):
+    st.caption("💬 Ask the AI Architect to dynamically alter rooms, dimensions, or features.")
     for msg in st.session_state.chat_history:
         st.markdown(f"**{msg['role'].capitalize()}**: {msg['content']}")
     
     ai_input = st.text_input("Ask AI...", placeholder="e.g., Make plot width 30m and add a pool")
-    if st.button("💬 Send to Architect") and ai_input:
+    if st.button("💬 Send to Architect", use_container_width=True) and ai_input:
         st.session_state.chat_history.append({"role": "user", "content": ai_input})
 
         try:
@@ -284,7 +289,7 @@ with st.sidebar.expander("🤖 Agentic Architect Chat", expanded=False):
                 cost_usd = prev_model.boq_estimate.cost_usd if prev_model.boq_estimate else 0
                 total_built = sum(prev_model.total_building_area(f) for f in range(1, prev_model.plot.num_floors + 1))
                 base_days = 90 + (prev_model.plot.num_floors * 45)
-                total_days = base_days + int(base_days * 0.12)
+                total_days = base_days + int(base_days * 0.18)
                 compliance_issues = sum(1 for a in prev_model.annotations if a.category == 'compliance_tag' and a.style_props.get('color') == 'red')
 
                 room_counts = Counter((r.room_type.lower(), r.floor) for r in prev_model.rooms)
@@ -317,6 +322,18 @@ if st.session_state.get('design_history'):
                 st.session_state.building_model_cache = _hist['model']
                 st.session_state.last_inputs = _hist['inputs']
                 st.rerun()
+
+# Share Blueprint Link panel
+if st.session_state.get("building_id"):
+    with st.sidebar.expander("🔗 Share Blueprint", expanded=False):
+        st.caption("Generate a signed 72-hour read-only token for client review.")
+        if st.button("🔑 Generate Share Link", use_container_width=True):
+            try:
+                from sharing import generate_share_token
+                _token = generate_share_token(st.session_state.building_id, str(st.session_state.user_id))
+                st.code(f"?share_token={_token}", language="text")
+            except Exception as _sh_err:  # noqa: BLE001
+                st.error(f"Share token error: {_sh_err}")
 
 if "wd" not in st.session_state:
     st.session_state.wd = {
@@ -526,9 +543,19 @@ building_model = TypeAdapter(BuildingModel).validate_python(st.session_state.bui
 total_built = sum(building_model.total_building_area(f) for f in range(1, plot_dims.num_floors + 1))
 gate_w_str = f"{building_model.main_gates[0].width:.1f}m Gate" if building_model.main_gates else "No Gate"
 
-# Compute Timeline
+# Compute Timeline (unified with Climate Zone selector in Scheduling & Risk tab)
+_CLIMATE_DELAY_MAP = {
+    "Tropical / Monsoon (India, SE Asia)": (0.18, "High ⚠️", ["Foundation", "Superstructure", "Finishing"]),
+    "Arid / Desert (Middle East, Rajasthan)": (0.05, "Low ✅", ["Foundation"]),
+    "Temperate (Europe, East Coast USA)": (0.10, "Medium ⚠️", ["Foundation", "Superstructure"]),
+    "Cold / Continental (North India, Canada)": (0.14, "Medium ⚠️", ["Foundation", "Superstructure"]),
+    "Mediterranean (Southern Europe, California)": (0.07, "Low ✅", ["Foundation"]),
+    "Tropical Humid (Coastal, Kerala, Florida)": (0.22, "High ⚠️", ["Foundation", "Superstructure", "Finishing", "MEP"]),
+}
+_active_climate = st.session_state.get("climate_zone_risk", "Tropical / Monsoon (India, SE Asia)")
+_active_delay_pct = _CLIMATE_DELAY_MAP.get(_active_climate, (0.18, "High ⚠️", []))[0]
 base_days = 90 + (plot_dims.num_floors * 45)
-total_days = base_days + int(base_days * 0.12)
+total_days = base_days + int(base_days * _active_delay_pct)
 
 # Compute Cost
 cost_usd = building_model.boq_estimate.cost_usd if building_model.boq_estimate else 0
@@ -683,7 +710,10 @@ with tab_2d:
                 payload_json = json.dumps(payload, sort_keys=True)
                 payload_hash = hashlib.md5(payload_json.encode()).hexdigest()
                 img_bytes = fetch_2d_image_cached(st.session_state.building_id, payload_hash, payload_json)
-                st.image(img_bytes, use_container_width=True)
+                try:
+                    st.image(img_bytes, use_container_width=True)
+                except TypeError:
+                    st.image(img_bytes, use_column_width=True)
             except requests.exceptions.ConnectionError:
                 st.error("❌ Cannot reach API server. Is the FastAPI service running on port 8000?")
             except Exception as e:  # noqa: BLE001
@@ -977,8 +1007,22 @@ with tab_risk:
             delta_color="inverse",
         )
         st.metric("Total Risk-Adjusted Timeline", f"{total_days} Days", f"≈ {round(total_days/30, 1)} Months")
-        _risk_progress = min(_delay_pct / 0.25, 1.0)
-        st.progress(_risk_progress, text=f"Overall Risk Probability: {_risk_label}")
+        _risk_pct_int = int(min(_delay_pct / 0.25, 1.0) * 100)
+        _bar_color = "#ff7b72" if _delay_pct > 0.15 else "#f0883e" if _delay_pct > 0.09 else "#3fb950"
+        st.markdown(
+            f"""
+            <div style="margin-top:8px; margin-bottom:8px;">
+                <div style="display:flex; justify-content:space-between; font-size:0.9rem; margin-bottom:4px;">
+                    <span><b>Overall Weather Risk Severity:</b> {_risk_label}</span>
+                    <span>{_delay_pct*100:.0f}% Delay Factor</span>
+                </div>
+                <div style="width:100%; background:rgba(255,255,255,0.1); height:10px; border-radius:6px; overflow:hidden;">
+                    <div style="width:{_risk_pct_int}%; background:{_bar_color}; height:100%; border-radius:6px;"></div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
         st.caption(f"🌧️ Phases most affected in this climate: {', '.join(_affected_phases)}")
 
 # ---------------------------------------------------------
@@ -987,20 +1031,22 @@ with tab_risk:
 
 def _poll_export_task(fmt: str, payload: dict, max_wait_secs: int = 30):
     """
-    Submit an async export task and poll until done (or timeout).
-    Returns the raw file bytes on success, None on failure/timeout.
+    Submit an async export task and poll until done (or timeout),
+    automatically falling back to synchronous /api/v1/export if async is unavailable.
     """
-    resp = requests.post(
-        f"{API_BASE_URL}/api/v1/export/async",
-        json=payload,
-        timeout=15
-    )
-    resp.raise_for_status()
-    result = resp.json()
+    try:
+        resp = requests.post(
+            f"{API_BASE_URL}/api/v1/export/async",
+            json=payload,
+            timeout=15
+        )
+        resp.raise_for_status()
+        result = resp.json()
+    except Exception:
+        result = {}
 
-    # API might fall back to sync export (returns bytes) or task_id (Celery)
+    # API might fall back to sync export (returns fallback_sync or no task_id)
     if "task_id" not in result:
-        # Async endpoint unavailable — try sync instead
         sync_resp = requests.post(
             f"{API_BASE_URL}/api/v1/export",
             json=payload,
@@ -1013,26 +1059,31 @@ def _poll_export_task(fmt: str, payload: dict, max_wait_secs: int = 30):
     deadline = time.time() + max_wait_secs
 
     while time.time() < deadline:
-        status_resp = requests.get(f"{API_BASE_URL}/api/v1/export/status/{task_id}", timeout=10)
-        status_data = status_resp.json()
-        if status_data["status"] == "SUCCESS":
-            download_url = (
-                f"{API_BASE_URL}/api/v1/download"
-                f"?path={status_data['result']['path']}"
-                f"&filename={status_data['result']['filename']}"
-                f"&media_type={status_data['result']['media_type']}"
-            )
-            return requests.get(download_url, timeout=30).content
-        elif status_data["status"] == "FAILURE":
-            st.error(f"Export failed: {status_data.get('error', 'Unknown Error')}", icon="⚠️")
-            return None
+        try:
+            status_resp = requests.get(f"{API_BASE_URL}/api/v1/export/status/{task_id}", timeout=10)
+            status_data = status_resp.json()
+            if status_data.get("status") == "SUCCESS":
+                download_url = (
+                    f"{API_BASE_URL}/api/v1/download"
+                    f"?path={status_data['result']['path']}"
+                    f"&filename={status_data['result']['filename']}"
+                    f"&media_type={status_data['result']['media_type']}"
+                )
+                return requests.get(download_url, timeout=30).content
+            elif status_data.get("status") == "FAILURE":
+                break
+        except Exception:
+            break
         time.sleep(1.0)
 
-    st.warning(
-        f"⏱️ Export timed out after {max_wait_secs}s. "
-        "Is the Celery worker running? Check `docker compose ps`."
+    # Fallback to synchronous export if async task failed or timed out
+    sync_resp = requests.post(
+        f"{API_BASE_URL}/api/v1/export",
+        json=payload,
+        timeout=60
     )
-    return None
+    sync_resp.raise_for_status()
+    return sync_resp.content
 
 with tab_eco:
     st.subheader("🌱 Eco & Sustainability Analysis")
@@ -1126,8 +1177,6 @@ with tab_export:
 
     st.subheader("📥 Export Architectural Blueprints & 3D Assets")
     st.write("Download high-resolution 2D CAD blueprint drawings and 3D printable/renderable formats.")
-
-    temp_dir = tempfile.mkdtemp()
 
     col_e1, col_e2, col_e3, col_e4 = st.columns(4)
 
