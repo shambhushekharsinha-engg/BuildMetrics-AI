@@ -17,6 +17,12 @@ import streamlit as st
 import streamlit.components.v1 as components
 from pydantic import TypeAdapter
 
+try:
+    from db import repo, init_db
+    _DB_AVAILABLE = True
+except Exception:  # noqa: BLE001
+    _DB_AVAILABLE = False
+
 from build_matrix.input_handler import InputHandler
 from build_matrix.models import ArchitecturalStyle, Blueprint2DConfig, BuildingModel
 
@@ -94,6 +100,13 @@ if 'username' not in st.session_state:
 if 'chat_history' not in st.session_state:
     st.session_state.chat_history = []
 
+# Run DB migrations once (non-fatal if DB unavailable)
+if _DB_AVAILABLE:
+    try:
+        init_db()
+    except Exception as _db_err:  # noqa: BLE001
+        st.warning(f"⚠️ Database init warning: {_db_err}. Some features may be limited.")
+
 # Custom Styling
 st.markdown(
     """
@@ -121,6 +134,21 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# Dynamic Light/Dark Theme CSS
+if st.session_state.get('dark_mode', True):
+    _theme_css = '''
+        :root { --primary-color: #00F0FF; --secondary-color: #38BDF8; --card-bg: rgba(15,23,42,0.85); --text-color: #F8FAFC; --bg: radial-gradient(ellipse at top, #0f172a 0%, #020617 100%); }
+        .stApp { background: var(--bg); color: var(--text-color); }
+    '''
+else:
+    _theme_css = '''
+        :root { --primary-color: #0066CC; --secondary-color: #0099FF; --card-bg: rgba(255,255,255,0.95); --text-color: #1E293B; --bg: #F1F5F9; }
+        .stApp { background: var(--bg); color: var(--text-color); }
+        .metric-card { background: var(--card-bg); border-left: 5px solid var(--primary-color); box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
+        .metric-card h4 { color: #475569; } .metric-card h2 { color: #1E293B; }
+    '''
+st.markdown(f'<style>{_theme_css}</style>', unsafe_allow_html=True)
+
 # Authentication Check (Blocks access to main app if not logged in)
 if not st.session_state.user_id:
     st.markdown('<div class="main-header" style="text-align: center; margin-top: 50px;">📐 Buildmetrics AI</div>', unsafe_allow_html=True)
@@ -146,7 +174,16 @@ if not st.session_state.user_id:
                     st.session_state.username = "demo"
                     st.rerun()
                 elif u_login and p_login:
-                    st.error("Invalid credentials. Try the demo account.")
+                    if _DB_AVAILABLE:
+                        user_id, msg = repo.verify_user(u_login, p_login)
+                        if user_id:
+                            st.session_state.user_id = user_id
+                            st.session_state.username = u_login
+                            st.rerun()
+                        else:
+                            st.error(f"Login failed: {msg}")
+                    else:
+                        st.error("Database unavailable. Use the demo account.")
                 else:
                     st.warning("Please enter credentials.")
                     
@@ -156,7 +193,16 @@ if not st.session_state.user_id:
             p_reg = st.text_input("Choose Password", type="password", key="r_pass")
             if st.button("Create Account ✨", use_container_width=True):
                 if u_reg and p_reg:
-                    st.success("Account created successfully! Please switch to the Login tab.")
+                    if len(p_reg) < 6:
+                        st.error("Password must be at least 6 characters.")
+                    elif _DB_AVAILABLE:
+                        success = repo.create_user(u_reg, p_reg)
+                        if success:
+                            st.success("Account created! Please switch to Login tab.")
+                        else:
+                            st.error("Username already taken. Choose another.")
+                    else:
+                        st.error("Database unavailable. Registration is disabled.")
                 else:
                     st.warning("Please fill out all fields.")
                     
@@ -188,6 +234,20 @@ with st.sidebar:
         st.session_state.user_id = None
         st.session_state.username = None
         st.rerun()
+    st.divider()
+
+    # Theme toggle
+    if 'dark_mode' not in st.session_state:
+        st.session_state.dark_mode = True
+    _dark_mode = st.toggle('🌙 Dark Mode', value=st.session_state.dark_mode, key='theme_toggle')
+    st.session_state.dark_mode = _dark_mode
+
+    # API health indicator
+    _api_ok = _check_api_health()
+    if _api_ok:
+        st.sidebar.success('🟢 API Connected')
+    else:
+        st.sidebar.error('🔴 API Offline — Check backend is running')
     st.divider()
 
 # Session Expiry Logic
@@ -248,6 +308,15 @@ with st.sidebar.expander("🤖 Agentic Architect Chat", expanded=False):
         except Exception as e:  # noqa: BLE001
             st.error(f"AI Error: {e!s}", icon="🤖")
 
+# Design History revert panel
+if st.session_state.get('design_history'):
+    with st.sidebar.expander('🕰️ Design History', expanded=False):
+        st.caption('Revert to a previous design version.')
+        for _hi, _hist in enumerate(reversed(st.session_state.design_history)):
+            if st.button(_hist['label'], key=f'hist_{_hi}', use_container_width=True):
+                st.session_state.building_model_cache = _hist['model']
+                st.session_state.last_inputs = _hist['inputs']
+                st.rerun()
 
 if "wd" not in st.session_state:
     st.session_state.wd = {
@@ -262,6 +331,10 @@ if "wd" not in st.session_state:
         "show_compass": True, "show_boundary": True, "show_title": True, "show_pathway": True,
         "show_gate": False, "show_garden_toggle": False
     }
+
+if 'design_history' not in st.session_state:
+    st.session_state.design_history = []  # list of dicts: {model, inputs, label}
+
 
 wd = st.session_state.wd
 
@@ -367,6 +440,28 @@ with wizard_tabs[3]:
     
     generate_clicked = st.button("🚀 Generate Blueprint", type="primary", use_container_width=True)
 
+    # Project Save (only for registered users, not demo)
+    if st.session_state.get("building_model_cache") and st.session_state.user_id != "demo_id_123":
+        st.divider()
+        st.markdown("**💾 Save This Design**")
+        _save_name = st.text_input("Project Name", placeholder="e.g., My Villa Design", key="save_proj_name")
+        if st.button("💾 Save to My Projects", use_container_width=True) and _save_name:
+            if _DB_AVAILABLE:
+                try:
+                    repo.save_project(
+                        user_id=st.session_state.user_id,
+                        project_name=_save_name,
+                        plot_length=wd["plot_length"],
+                        plot_width=wd["plot_width"],
+                        num_floors=wd["num_floors"],
+                        prompt_data={"prompt": wd["prompt"], "style": wd["style"]}
+                    )
+                    st.success(f"✅ Project \"{_save_name}\" saved!")
+                except Exception as _se:  # noqa: BLE001
+                    st.error(f"Save failed: {_se}")
+            else:
+                st.warning("Database unavailable — project not saved.")
+
 
 # Process Input & Generate Spatial Model
 plot_dims = InputHandler.create_plot_dimensions(
@@ -409,6 +504,16 @@ if should_generate:
             resp.raise_for_status()
             data = resp.json()
             st.session_state.building_id = data["building_id"]
+            # Save current state to history before overwriting
+            if 'building_model_cache' in st.session_state:
+                st.session_state.design_history.append({
+                    'model': st.session_state.building_model_cache,
+                    'inputs': st.session_state.get('last_inputs', {}),
+                    'label': f"v{len(st.session_state.design_history)+1}: {st.session_state.get('last_inputs', {}).get('prompt', 'Design')[:40]}..."
+                })
+                # Keep last 5 only
+                if len(st.session_state.design_history) > 5:
+                    st.session_state.design_history = st.session_state.design_history[-5:]
             st.session_state.building_model_cache = data["model"]
             st.session_state.last_inputs = current_inputs
         except requests.exceptions.RequestException as e:
@@ -750,50 +855,131 @@ with tab_eng:
         st.dataframe(sb_data, use_container_width=True)
 
     st.divider()
-    st.markdown("### 🔍 NLP BOQ Standardizer")
-    st.caption("AI-Augmented Cost Estimation: Automatically aligns free-text BOQ descriptions with MasterFormat cost indexes.")
+    st.markdown("### 🔍 BOQ → MasterFormat Cost Mapping")
+    st.caption("Computed quantities from this building, mapped to MasterFormat cost codes. All values derived from generated BOQ.")
     nlp_col1, nlp_col2 = st.columns([1, 2])
     with nlp_col1:
-        st.info("Uses ensemble NLP (similar to Peyman Jafary et al. 2025) to map extracted structural quantities to standard regional construction databases.")
+        st.info(
+            "Quantities extracted directly from the generated Building Model BOQ and matched to "
+            "CSI MasterFormat 2016 Division codes. Unit rates based on IS 456 / NBC India 2024 market indices."
+        )
     with nlp_col2:
-        nlp_boq_data = [
-            {"Raw Extracted Item": "Reinforcement Steel", "NLP Matched MasterFormat": "03 21 00 - Reinforcing Steel"},
-            {"Raw Extracted Item": "Concrete Volume", "NLP Matched MasterFormat": "03 30 00 - Cast-in-Place Concrete"},
-            {"Raw Extracted Item": "Brickwork / Blockwork", "NLP Matched MasterFormat": "04 22 00 - Concrete Unit Masonry"},
-            {"Raw Extracted Item": "Glass Window Area", "NLP Matched MasterFormat": "08 50 00 - Windows"}
-        ]
-        st.table(nlp_boq_data)
+        if building_model.boq_estimate:
+            _boq = building_model.boq_estimate
+            nlp_boq_data = [
+                {
+                    "Quantity": f"{_boq.steel_weight_tons:.2f} t",
+                    "Description": "Reinforcement Steel (TMT Fe500)",
+                    "MasterFormat": "03 21 00 - Reinforcing Steel",
+                    "Est. Cost (USD)": f"${_boq.steel_weight_tons * 820:,.0f}",
+                },
+                {
+                    "Quantity": f"{_boq.concrete_volume_m3:.2f} m³",
+                    "Description": "Cast-in-Place Concrete (M30)",
+                    "MasterFormat": "03 30 00 - Cast-in-Place Concrete",
+                    "Est. Cost (USD)": f"${_boq.concrete_volume_m3 * 125:,.0f}",
+                },
+                {
+                    "Quantity": f"{_boq.brickwork_m2:.2f} m²",
+                    "Description": "Brick / Blockwork Masonry",
+                    "MasterFormat": "04 22 00 - Concrete Unit Masonry",
+                    "Est. Cost (USD)": f"${_boq.brickwork_m2 * 48:,.0f}",
+                },
+                {
+                    "Quantity": f"{_boq.glass_m2:.2f} m²",
+                    "Description": "Windows & Glazing",
+                    "MasterFormat": "08 50 00 - Windows",
+                    "Est. Cost (USD)": f"${_boq.glass_m2 * 290:,.0f}",
+                },
+                {
+                    "Quantity": f"{_boq.flooring_m2:.2f} m²",
+                    "Description": "Floor Finishes (Ceramic Tile)",
+                    "MasterFormat": "09 65 00 - Resilient Flooring",
+                    "Est. Cost (USD)": f"${_boq.flooring_m2 * 38:,.0f}",
+                },
+                {
+                    "Quantity": "Lump Sum",
+                    "Description": "MEP Systems (Plumbing / HVAC / Elec)",
+                    "MasterFormat": "21-28 00 - MEP Systems",
+                    "Est. Cost (USD)": f"${_boq.mep_cost_usd:,.0f}",
+                },
+            ]
+            st.dataframe(nlp_boq_data, use_container_width=True)
+        else:
+            st.info("BOQ data not available. Generate a building first.")
 
 # ---------------------------------------------------------
 # TAB 5: Scheduling & Risk Management
 # ---------------------------------------------------------
 with tab_risk:
     st.subheader("🌦️ Weather-Informed Construction Scheduling & Risk Management")
-    st.caption("Predictive timeline generation and meteorological risk forecasting based on building scale.")
-    
+    st.caption("Predictive timeline generation using regional meteorological delay factors.")
+
+    # Climate zone drives real delay multipliers
+    _climate_delay_map = {
+        "Tropical / Monsoon (India, SE Asia)": (0.18, "High ⚠️", ["Foundation", "Superstructure", "Finishing"]),
+        "Arid / Desert (Middle East, Rajasthan)": (0.05, "Low ✅", ["Foundation"]),
+        "Temperate (Europe, East Coast USA)": (0.10, "Medium ⚠️", ["Foundation", "Superstructure"]),
+        "Cold / Continental (North India, Canada)": (0.14, "Medium ⚠️", ["Foundation", "Superstructure"]),
+        "Mediterranean (Southern Europe, California)": (0.07, "Low ✅", ["Foundation"]),
+        "Tropical Humid (Coastal, Kerala, Florida)": (0.22, "High ⚠️", ["Foundation", "Superstructure", "Finishing", "MEP"]),
+    }
+    _sel_climate = st.selectbox(
+        "🌍 Project Location / Climate Zone",
+        list(_climate_delay_map.keys()),
+        key="climate_zone_risk",
+    )
+    _delay_pct, _risk_label, _affected_phases = _climate_delay_map[_sel_climate]
+
+    base_days = 90 + (plot_dims.num_floors * 45)
+    weather_delay = int(base_days * _delay_pct)
+    total_days = base_days + weather_delay
+
     col_r1, col_r2 = st.columns(2)
     with col_r1:
         st.markdown("### 📅 Projected Timeline")
-        base_days = 90 + (plot_dims.num_floors * 45)
-        weather_delay = int(base_days * 0.12)  # Simulated 12% delay risk
-        total_days = base_days + weather_delay
-        
+        _phase_durations = [
+            ("1. Site Prep & Excavation", 0.10),
+            ("2. Foundation & Substructure", 0.15),
+            ("3. Superstructure & Framing", 0.35),
+            ("4. MEP Rough-in (Plumbing/Elec)", 0.15),
+            ("5. Interior & Exterior Finishes", 0.20),
+            ("6. Landscaping & Handover", 0.05),
+        ]
+        _phase_risk_lookup = {
+            "Foundation": ["2. Foundation & Substructure"],
+            "Superstructure": ["3. Superstructure & Framing"],
+            "Finishing": ["5. Interior & Exterior Finishes"],
+            "MEP": ["4. MEP Rough-in (Plumbing/Elec)"],
+        }
+        _risky_phases = set()
+        for _risk_phase in _affected_phases:
+            for _ph in _phase_risk_lookup.get(_risk_phase, []):
+                _risky_phases.add(_ph)
+
         schedule_data = [
-            {"Phase": "1. Site Prep & Excavation", "Duration": f"{int(base_days*0.1)} Days", "Status": "On Track"},
-            {"Phase": "2. Foundation & Substructure", "Duration": f"{int(base_days*0.15)} Days", "Status": "Weather Risk ⚠️"},
-            {"Phase": "3. Superstructure & Framing", "Duration": f"{int(base_days*0.35)} Days", "Status": "Weather Risk ⚠️"},
-            {"Phase": "4. MEP Rough-in (Plumbing/Elec)", "Duration": f"{int(base_days*0.15)} Days", "Status": "On Track"},
-            {"Phase": "5. Interior & Exterior Finishes", "Duration": f"{int(base_days*0.2)} Days", "Status": "On Track"},
-            {"Phase": "6. Landscaping & Handover", "Duration": f"{int(base_days*0.05)} Days", "Status": "On Track"},
+            {
+                "Phase": phase,
+                "Duration": f"{int(base_days * pct)} Days",
+                "Weather Risk": f"⚠️ +{int(base_days * pct * _delay_pct)} Days" if phase in _risky_phases else "✅ Unaffected",
+            }
+            for phase, pct in _phase_durations
         ]
         st.table(schedule_data)
-        
+
     with col_r2:
         st.markdown("### ⚠️ Risk Analysis Model")
         st.metric("Estimated Base Timeline", f"{base_days} Days")
-        st.metric("Meteorological Delay Risk", f"+{weather_delay} Days", "-12% Efficiency", delta_color="inverse")
+        st.metric(
+            "Meteorological Delay Risk",
+            f"+{weather_delay} Days",
+            f"-{_delay_pct*100:.0f}% Efficiency ({_sel_climate.split('/')[0].strip()})",
+            delta_color="inverse",
+        )
         st.metric("Total Risk-Adjusted Timeline", f"{total_days} Days", f"≈ {round(total_days/30, 1)} Months")
-        st.progress(0.15, text="Overall Risk Probability (Low-Medium)")
+        _risk_progress = min(_delay_pct / 0.25, 1.0)
+        st.progress(_risk_progress, text=f"Overall Risk Probability: {_risk_label}")
+        st.caption(f"🌧️ Phases most affected in this climate: {', '.join(_affected_phases)}")
 
 # ---------------------------------------------------------
 # TAB 6: Export Center
@@ -850,24 +1036,90 @@ def _poll_export_task(fmt: str, payload: dict, max_wait_secs: int = 30):
 
 with tab_eco:
     st.subheader("🌱 Eco & Sustainability Analysis")
-    st.caption("AI-driven climate, sunlight, and green-building metric estimates.")
+    st.caption("Computed from building model using ICE carbon database, NREL solar, and ASHRAE rainwater formulas.")
     st.markdown("---")
-    
-    col_eco1, col_eco2 = st.columns(2)
-    with col_eco1:
-        st.markdown("### ☀️ Solar & Energy")
-        st.info("**Solar Potential:** High (Approx. 450 kWh/month if fully paneled)")
-        st.success("**Passive Heating:** Optimal South-facing windows detected in Living Room.")
-        st.progress(85, text="Energy Efficiency Score (85/100)")
-        
-    with col_eco2:
-        st.markdown("### 💧 Water & Materials")
-        st.info("**Rainwater Harvesting:** Recommended 5000L tank on Roof.")
-        st.warning("**Material Embodied Carbon:** Moderate. Consider substituting TMT steel with recycled alternatives.")
-        st.progress(72, text="Sustainable Materials Score (72/100)")
-    
-    st.markdown("### 🌲 LEED Certification Potential")
-    st.markdown(f"> Based on current layout (Footprint {plot_length}x{plot_width}), this building qualifies for **LEED Silver**.")
+
+    # Climate zone selector (drives solar and risk multipliers)
+    _climate_options_eco = {
+        "Tropical / Monsoon (India, SE Asia)": 600,
+        "Arid / Desert (Middle East, Rajasthan)": 100,
+        "Temperate (Europe, East Coast USA)": 800,
+        "Cold / Continental (North India, Canada)": 500,
+        "Mediterranean (Southern Europe, California)": 400,
+        "Tropical Humid (Coastal, Kerala, Florida)": 2200,
+    }
+    _climate_zone_eco = st.selectbox(
+        "🌍 Climate Zone (affects solar & rainwater calculations)",
+        list(_climate_options_eco.keys()),
+        key="climate_zone_eco"
+    )
+    _annual_rainfall = _climate_options_eco[_climate_zone_eco]
+
+    # Compute eco metrics from real building model data
+    try:
+        from build_matrix.eco_engine import compute_eco_metrics
+        _eco = compute_eco_metrics(
+            building=building_model,
+            plot_length=plot_length,
+            plot_width=plot_width,
+            total_built_area=total_built,
+            annual_rainfall_mm=float(_annual_rainfall),
+            climate_zone=_climate_zone_eco,
+        )
+        _eco_ok = True
+    except Exception as _eco_err:  # noqa: BLE001
+        st.error(f"Eco engine error: {_eco_err}")
+        _eco_ok = False
+
+    if _eco_ok:
+        col_eco1, col_eco2 = st.columns(2)
+        with col_eco1:
+            st.markdown("### ☀️ Solar & Energy")
+            _solar_label = "High 🟢" if _eco.solar_kwh_month > 500 else "Medium 🟡" if _eco.solar_kwh_month > 200 else "Low 🔴"
+            st.info(f"**Solar Potential:** {_solar_label} — Est. **{_eco.solar_kwh_month:.0f} kWh/month** "
+                    f"from {_eco.roof_area_m2:.0f} m² roof (70% panel coverage)")
+            st.metric("Solar Coverage of Demand", f"{_eco.solar_coverage_pct:.1f}%",
+                      f"{_eco.solar_kwh_month:.0f} vs {_eco.energy_use_kwh_month:.0f} kWh/mo demand")
+            if _eco.has_south_facing_living:
+                st.success("**Passive Heating:** ✅ South-facing Living Room detected — optimal for passive solar gain.")
+            else:
+                st.warning("**Passive Heating:** ⚠️ No south-facing Living Room. Consider reorienting for passive solar.")
+            st.metric("Annual CO₂ Offset (Solar)", f"{_eco.solar_co2_offset_kg_year/1000:.1f} tonnes/year",
+                      "vs Indian grid (0.82 kg CO₂/kWh)")
+            st.progress(_eco.energy_score, text=f"Energy Efficiency Score ({_eco.energy_score}/100)")
+
+        with col_eco2:
+            st.markdown("### 💧 Water & Materials")
+            st.info(f"**Rainwater Harvesting:** Recommended **{_eco.rainwater_tank_liters:,}L** storage "
+                    f"({_annual_rainfall}mm/yr × {_eco.roof_area_m2:.0f}m² roof × 80% efficiency)")
+            st.metric("Embodied Carbon", f"{_eco.embodied_carbon_tonnes:.1f} tonnes CO₂",
+                      f"{_eco.carbon_per_m2:.0f} kg/m² built area")
+            _steel_carbon = _eco.steel_tons * 1800
+            _recycled_carbon = _eco.steel_tons * 580
+            _savings = (_steel_carbon - _recycled_carbon) / 1000
+            if _eco.embodied_carbon_tonnes > 50:
+                st.warning(f"**Steel Substitution Opportunity:** Switching to recycled TMT steel saves "
+                           f"~{_savings:.1f} tonnes CO₂ ({_savings/_eco.embodied_carbon_tonnes*100:.0f}% reduction)")
+            else:
+                st.success(f"**Embodied Carbon:** {_eco.embodied_carbon_tonnes:.1f} t CO₂ — within low-carbon range for this scale.")
+            st.progress(_eco.materials_score, text=f"Sustainable Materials Score ({_eco.materials_score}/100)")
+
+        st.divider()
+        _leed_col1, _leed_col2, _leed_col3 = st.columns(3)
+        with _leed_col1:
+            st.metric("⚡ Energy Score", f"{_eco.energy_score}/100")
+        with _leed_col2:
+            st.metric("♻️ Materials Score", f"{_eco.materials_score}/100")
+        with _leed_col3:
+            st.metric("💧 Water Score", f"{_eco.water_score}/100")
+
+        st.markdown("### 🌲 LEED Certification Potential")
+        st.markdown(
+            f"> Based on computed scores (Energy: {_eco.energy_score}, Materials: {_eco.materials_score}, "
+            f"Water: {_eco.water_score}), this building qualifies for **{_eco.leed_tier}** "
+            f"(est. {_eco.leed_points_estimate} LEED points)."
+        )
+        st.caption("⚠️ Indicative only. Formal LEED certification requires third-party commissioning and site audit.")
 
 
 with tab_export:

@@ -19,17 +19,19 @@ services:
       timeout: 5s
       retries: 5
 
-  # ─── Redis (Celery Broker + Backend) ──────────────────────────────────────
+  # ─── Redis (Celery Broker + Backend + Model Store) ─────────────────────────
   redis:
     image: redis:7-alpine
-    restart: always
+    restart: unless-stopped
     ports:
-      - "6379:6379"
+      - '6379:6379'
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
       timeout: 5s
       retries: 5
+    volumes:
+      - redis_data:/data
 
   # ─── FastAPI Backend ───────────────────────────────────────────────────────
   api:
@@ -42,10 +44,11 @@ services:
       - .env
     environment:
       - DATABASE_URL=postgresql://buildmetrics:supersecret@db:5432/buildmetrics
-      - REDIS_URL=redis://redis:6379/0
+      - REDIS_URL=redis://redis:6379
       - SHARED_EXPORT_DIR=/app/exports
       - PYTHONPATH=/app
       - ENVIRONMENT=production
+      - GIT_SHA=${GIT_SHA:-dev}
     ports:
       - "8000:8000"
     command: ["sh", "-c", "alembic upgrade head && uvicorn api:app --host 0.0.0.0 --port 8000"]
@@ -125,6 +128,36 @@ services:
         limits:
           memory: 1g
 
+  # ─── Prometheus ───────────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    restart: unless-stopped
+    ports:
+      - '9090:9090'
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.retention.time=15d'
+
+  # ─── Grafana ──────────────────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:11.1.0
+    restart: unless-stopped
+    ports:
+      - '3000:3000'
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: 'buildmetrics'
+      GF_USERS_ALLOW_SIGN_UP: 'false'
+    volumes:
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+
 volumes:
   pgdata:
   exports:
+  redis_data:
+  prometheus_data:
+  grafana_data:

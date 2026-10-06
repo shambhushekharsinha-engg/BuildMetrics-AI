@@ -4,3 +4,14 @@ __pycache__/
 cost_model.pkl
 .env
 walkthrough.md
+
+# Test artifacts
+test_buildmetrics.db
+test.db
+*.db
+.coverage
+coverage.xml
+htmlcov/
+
+# Monitoring data
+monitoring/data/
