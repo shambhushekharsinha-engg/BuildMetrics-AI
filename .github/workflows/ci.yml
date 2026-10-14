@@ -46,6 +46,9 @@ jobs:
             --allow-untyped-defs
         continue-on-error: true
 
+      - name: Train/generate cost model
+        run: python train_model.py
+
       - name: Run test suite with coverage
         env:
           GEMINI_API_KEY: "dummy_key_for_tests"
