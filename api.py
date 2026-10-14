@@ -139,8 +139,9 @@ class ModelStore:
 
     def get(self, building_id: str):
         """Return the deserialized building model or *None* if not found / expired."""
-        from build_matrix.models import BuildingModel
         from pydantic import TypeAdapter
+
+        from build_matrix.models import BuildingModel
 
         if self._redis:
             raw = self._redis.get(self._KEY_PREFIX + building_id)
@@ -171,7 +172,7 @@ class ModelStore:
                     try:
                         payload = json.loads(raw)
                         created_at = payload.get("created_at")
-                    except Exception:  # noqa: BLE001
+                    except Exception:  # noqa: BLE001, S110
                         pass
                 results.append(
                     {
@@ -191,7 +192,7 @@ class ModelStore:
                         "building_id": building_id,
                         "created_at": payload.get("created_at"),
                         "ttl_seconds": int(
-                            (_MODEL_TTL_SECONDS - (datetime.now(timezone.utc) - entry["created_at"]).total_seconds())
+                            _MODEL_TTL_SECONDS - (datetime.now(timezone.utc) - entry["created_at"]).total_seconds()
                         ),
                     }
                 )
@@ -301,7 +302,7 @@ def _tmp_file(suffix: str) -> str:
     The caller is responsible for scheduling ``os.unlink(path)`` via
     ``BackgroundTask`` so the file is removed after the HTTP response is sent.
     """
-    tmp = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
+    tmp = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)  # noqa: SIM115
     path = tmp.name
     tmp.close()
     return path
@@ -525,13 +526,14 @@ def export_file_async(req: ExportRequest):
     # Lazy import: prevents crash when Redis/Celery not available in local dev
     try:
         from pydantic import TypeAdapter
+
         from build_matrix.models import BuildingModel
         from worker import export_model_task
 
         model_dict = TypeAdapter(BuildingModel).dump_python(model, mode="json")
         task = export_model_task.delay(model_dict, req.format, req.floor)
         return {"task_id": task.id}
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         logger.warning("Celery worker unavailable, instructing client to use sync export: %s", e)
         return {"fallback_sync": True}
 

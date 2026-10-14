@@ -1,0 +1,33 @@
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "F",
+    "I",
+    "UP",
+    "B",
+    "SIM",
+]
+ignore = [
+    "E402",   # module level import not at top of file (alembic/env.py)
+    "E501",   # line too long
+    "E701",   # multiple statements on one line (colon)
+    "E702",   # multiple statements on one line (semicolon)
+    "E741",   # ambiguous variable name (e.g. l for length)
+    "UP017",  # use datetime.UTC alias
+    "B007",   # loop control variable not used
+    "B008",   # function call in argument defaults (FastAPI Depends/Header)
+    "B904",   # raise ... from err in except clause
+    "B905",   # zip() without explicit strict=
+    "SIM115", # open file without context manager
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["build_matrix"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]

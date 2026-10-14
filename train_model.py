@@ -16,13 +16,14 @@ Version: 1.1.0 (October 2026)
 """
 
 import os
-import numpy as np
+
 import joblib
+import numpy as np
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_absolute_error, r2_score
+from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import r2_score, mean_absolute_error
 
 # ─── Reproducibility ────────────────────────────────────────────────────────
 RANDOM_SEED = 42
@@ -90,7 +91,7 @@ output_path = os.path.join(os.path.dirname(__file__), "cost_model.pkl")
 joblib.dump(model, output_path)
 print(f"\nModel saved to: {output_path}")
 print(f"  Samples trained: {len(X_train):,}")
-print(f"  Features: area, floors, tier, grade")
+print("  Features: area, floors, tier, grade")
 print(f"  Version: 1.1.0 | {RANDOM_SEED=}")
 
 if __name__ == "__main__":

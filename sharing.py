@@ -7,8 +7,6 @@ import hmac
 import json
 import os
 import time
-from typing import Optional
-
 
 _SECRET = os.environ.get("SHARE_SECRET", "dev-share-secret-change-in-prod")
 
@@ -44,7 +42,7 @@ def generate_share_token(building_id: str, user_id: str, ttl_hours: int = 72) ->
     return f"{payload_b64}.{sig}"
 
 
-def validate_share_token(token: str) -> Optional[dict]:
+def validate_share_token(token: str) -> dict | None:
     """
     Validate a share token. Returns the payload dict on success, None on failure.
     
@@ -70,7 +68,7 @@ def validate_share_token(token: str) -> Optional[dict]:
     try:
         payload_json = base64.urlsafe_b64decode(payload_b64.encode()).decode()
         payload = json.loads(payload_json)
-    except Exception:
+    except Exception:  # noqa: BLE001
         return None
     
     # Check expiry

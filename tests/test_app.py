@@ -3,9 +3,9 @@ Streamlit AppTest smoke tests for app.py.
 Verifies the app file compiles cleanly and key modules are importable
 without triggering a full Streamlit network session.
 """
-import py_compile
 import compileall
-import os
+import py_compile
+
 import pytest
 
 
@@ -24,32 +24,36 @@ def test_all_python_files_compile():
 def test_build_matrix_package_importable():
     """build_matrix package must be importable (checks __init__ + core modules)."""
     import build_matrix  # noqa: F401
-    from build_matrix import models, engineering, schemas  # noqa: F401
+    from build_matrix import engineering, models, schemas  # noqa: F401
 
 
 def test_models_importable():
     """Key model classes must be importable."""
     from build_matrix.models import (  # noqa: F401
-        BuildingModel, PlotDimensions, RoomSpec,
-        ArchitecturalStyle, BOQEstimate, Blueprint2DConfig,
+        ArchitecturalStyle,
+        Blueprint2DConfig,
+        BOQEstimate,
+        BuildingModel,
+        PlotDimensions,
+        RoomSpec,
     )
 
 
 def test_api_module_importable():
     """api.py must be importable (FastAPI app construction runs cleanly)."""
-    import api  # noqa: F401
+    import api
     assert hasattr(api, "app"), "api module must expose 'app' FastAPI instance"
 
 
 def test_db_module_importable():
     """db.py must be importable without crashing."""
-    import db  # noqa: F401
+    import db
     assert hasattr(db, "repo"), "db module must expose 'repo' DatabaseRepository"
 
 
 def test_cost_engine_importable():
     """cost_engine.py must be importable without Streamlit dependency."""
-    import cost_engine  # noqa: F401
+    import cost_engine
     assert hasattr(cost_engine, "predict_cost")
 
 
@@ -68,6 +72,7 @@ def test_sharing_module_importable():
 def test_share_token_expiry():
     """Expired tokens must be rejected by validate_share_token."""
     import time
+
     from sharing import generate_share_token, validate_share_token
     # Generate with 0-hour TTL (already expired)
     token = generate_share_token("building-id", "user-1", ttl_hours=0)
@@ -78,10 +83,13 @@ def test_share_token_expiry():
 
 def test_eco_engine_computes():
     """eco_engine must compute without error for a valid model."""
-    from build_matrix.models import (
-        BuildingModel, PlotDimensions, ArchitecturalStyle, BOQEstimate
-    )
     from build_matrix.eco_engine import compute_eco_metrics
+    from build_matrix.models import (
+        ArchitecturalStyle,
+        BOQEstimate,
+        BuildingModel,
+        PlotDimensions,
+    )
 
     plot = PlotDimensions(length=20.0, width=15.0, num_floors=2)
     building = BuildingModel(
@@ -117,11 +125,14 @@ def test_eco_engine_computes():
 
 def test_design_comparison():
     """compare_designs must return a valid DesignDiff."""
-    from build_matrix.models import (
-        BuildingModel, PlotDimensions, ArchitecturalStyle,
-        RoomSpec, BOQEstimate
-    )
     from build_matrix.comparison import compare_designs
+    from build_matrix.models import (
+        ArchitecturalStyle,
+        BOQEstimate,
+        BuildingModel,
+        PlotDimensions,
+        RoomSpec,
+    )
 
     plot = PlotDimensions(length=20.0, width=15.0, num_floors=2)
     model_a = BuildingModel(

@@ -6,7 +6,6 @@ import hashlib
 import io
 import json
 import os
-import tempfile
 import time
 import uuid
 
@@ -21,7 +20,7 @@ import streamlit.components.v1 as components
 from pydantic import TypeAdapter
 
 try:
-    from db import repo, init_db
+    from db import init_db, repo
     _DB_AVAILABLE = True
 except Exception:  # noqa: BLE001
     _DB_AVAILABLE = False
@@ -29,7 +28,12 @@ except Exception:  # noqa: BLE001
 from build_matrix.drawing_2d import Blueprint2DRenderer
 from build_matrix.input_handler import InputHandler
 from build_matrix.layout_engine import LayoutEngine
-from build_matrix.models import ArchitecturalStyle, Blueprint2DConfig, BuildingModel, PlotDimensions
+from build_matrix.models import (
+    ArchitecturalStyle,
+    Blueprint2DConfig,
+    BuildingModel,
+    PlotDimensions,
+)
 from build_matrix.rendering_3d import Blueprint3DRenderer
 
 st.set_page_config(
@@ -62,7 +66,7 @@ API_BASE_URL = os.environ.get("API_BASE_URL") or os.environ.get("API_URL")
 try:
     if not API_BASE_URL:
         API_BASE_URL = st.secrets.get("API_URL") or st.secrets.get("API_BASE_URL")
-except Exception:
+except Exception:  # noqa: BLE001, S110
     pass
 if not API_BASE_URL:
     API_BASE_URL = "http://localhost:8000"
@@ -151,7 +155,7 @@ def _check_api_health_latency() -> tuple[bool, float]:
     try:
         resp = requests.get(f"{API_BASE_URL}/healthz", timeout=2.0)
         return (resp.status_code == 200, (time.time() - t0) * 1000)
-    except Exception:
+    except Exception:  # noqa: BLE001
         return (False, 0.0)
 
 def _check_api_health() -> bool:
@@ -217,7 +221,7 @@ st.markdown(f'<style>{_theme_css}</style>', unsafe_allow_html=True)
 try:
     from ui_styles import inject_accessibility_css
     st.markdown(inject_accessibility_css(), unsafe_allow_html=True)
-except Exception:
+except Exception:  # noqa: BLE001, S110
     pass
 
 # Authentication Check (Blocks access to main app if not logged in)
@@ -634,7 +638,7 @@ if should_generate:
                         st.session_state.design_history = st.session_state.design_history[-5:]
                 st.session_state.building_model_cache = data["model"]
                 st.session_state.last_inputs = current_inputs
-            except Exception as e:
+            except Exception:  # noqa: BLE001
                 st.toast("⚡ Cloud API cold or unavailable — switched to Turbo Direct Engine seamlessly!", icon="⚡")
                 b_id, serialized_model = generate_building_direct(current_inputs)
                 st.session_state.building_id = b_id
@@ -869,7 +873,7 @@ with tab_2d:
                     payload_json = json.dumps(payload, sort_keys=True)
                     payload_hash = hashlib.md5(payload_json.encode()).hexdigest()
                     img_bytes = fetch_2d_image_cached(st.session_state.building_id, payload_hash, payload_json)
-                except Exception:
+                except Exception:  # noqa: BLE001
                     st.toast("⚡ Cloud API slow — rendered with Turbo Direct Engine!", icon="⚡")
                     cfg_json = json.dumps(config_2d.model_dump(), sort_keys=True)
                     b_cache_json = json.dumps(st.session_state.building_model_cache, sort_keys=True)
@@ -908,7 +912,7 @@ with tab_3d:
         with st.spinner("Rendering 3D Model via API..."):
             try:
                 html_3d_code = fetch_3d_html_cached(st.session_state.building_id)
-            except Exception:
+            except Exception:  # noqa: BLE001
                 st.toast("⚡ Cloud API slow — rendered with Turbo Direct Engine!", icon="⚡")
                 b_cache_json = json.dumps(st.session_state.building_model_cache, sort_keys=True)
                 html_3d_code = render_3d_direct_cached(b_cache_json)
@@ -1286,7 +1290,7 @@ def _poll_export_task(fmt: str, payload: dict, max_wait_secs: int = 30):
         )
         resp.raise_for_status()
         result = resp.json()
-    except Exception:
+    except Exception:  # noqa: BLE001
         result = {}
 
     # API might fall back to sync export (returns fallback_sync or no task_id)
@@ -1316,7 +1320,7 @@ def _poll_export_task(fmt: str, payload: dict, max_wait_secs: int = 30):
                 return requests.get(download_url, timeout=30).content
             elif status_data.get("status") == "FAILURE":
                 break
-        except Exception:
+        except Exception:  # noqa: BLE001
             break
         time.sleep(1.0)
 

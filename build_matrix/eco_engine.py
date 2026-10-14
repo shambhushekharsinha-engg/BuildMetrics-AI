@@ -13,7 +13,6 @@ from dataclasses import dataclass
 
 from build_matrix.models import BuildingModel
 
-
 # ─── Embodied Carbon Coefficients (ICE database, kgCO2/unit) ───────────────
 CARBON_COEFFICIENTS = {
     "concrete_m3": 150.0,     # kg CO2 per m³ (typical RC30)

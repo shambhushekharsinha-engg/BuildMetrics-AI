@@ -4,7 +4,6 @@ Computes structured diffs between two BuildingModel instances.
 Used in the AI chat diff view and the new "Compare Designs" feature.
 """
 from dataclasses import dataclass
-from typing import Optional
 
 from build_matrix.models import BuildingModel
 

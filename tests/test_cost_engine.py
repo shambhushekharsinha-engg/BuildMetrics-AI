@@ -3,6 +3,7 @@ Unit tests for cost_engine.py.
 Verifies ML model loading, cost prediction, and module independence from Streamlit.
 """
 import os
+
 import pytest
 
 

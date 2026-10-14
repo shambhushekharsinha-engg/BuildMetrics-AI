@@ -51,7 +51,7 @@ def predict_cost(area: float, floors: int, tier: int, grade: int) -> float:
         pred = float(model.predict(X)[0])
         if pred > 0:
             return pred
-    except Exception:
+    except Exception:  # noqa: BLE001, S110
         pass
     return _parametric_cost(area, floors, tier, grade)
 

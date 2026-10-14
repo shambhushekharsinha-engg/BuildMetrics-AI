@@ -2,7 +2,6 @@
 Shared pytest fixtures for BuildMetrics AI test suite.
 Provides environment setup, shared API client, and sample building fixtures.
 """
-import os
 import pytest
 
 
@@ -19,6 +18,7 @@ def set_test_env(monkeypatch):
 def api_client():
     """Shared FastAPI TestClient for all API tests."""
     from fastapi.testclient import TestClient
+
     from api import app
     return TestClient(app)
 
@@ -41,6 +41,6 @@ def sample_building_id(api_client):
 @pytest.fixture
 def minimal_building():
     """Return a minimal BuildingModel for unit tests (no DB, no API)."""
-    from build_matrix.models import BuildingModel, PlotDimensions, ArchitecturalStyle
+    from build_matrix.models import ArchitecturalStyle, BuildingModel, PlotDimensions
     plot = PlotDimensions(length=20.0, width=15.0, num_floors=2)
     return BuildingModel(plot=plot, style=ArchitecturalStyle.MODERN)
