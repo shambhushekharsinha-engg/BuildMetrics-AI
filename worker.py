@@ -71,6 +71,11 @@ def export_model_task(model_dict: dict, format: str, floor: int = 1) -> dict:
         ExporterEngine.export_3d_obj(model, path)
         filename = "BUILD-MATRIX_3D.obj"
         media_type = "model/obj"
+    elif format == "ifc":
+        path = os.path.join(temp_dir, "model.ifc")
+        ExporterEngine.export_3d_ifc(model, path)
+        filename = "BUILD-MATRIX_Model.ifc"
+        media_type = "application/x-step"
     elif format == "gltf":
         path = os.path.join(temp_dir, "model.gltf")
         ExporterEngine.export_3d_gltf(model, path)

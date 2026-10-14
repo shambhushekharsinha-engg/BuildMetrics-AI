@@ -15,6 +15,7 @@ import matplotlib.pyplot as plt
 import trimesh
 
 from .cad_dxf import DXFGenerator
+from .cad_ifc import IFCGenerator
 from .drawing_2d import Blueprint2DRenderer
 from .models import Blueprint2DConfig, BuildingModel
 from .rendering_3d import Blueprint3DRenderer
@@ -22,6 +23,14 @@ from .rendering_3d import Blueprint3DRenderer
 
 class ExporterEngine:
     """Handles multi-format file exports for 2D blueprints and 3D architectural assets."""
+
+    @classmethod
+    def export_3d_ifc(cls, building: BuildingModel, filepath: str) -> str:
+        """Exports 3D building to Industry-Standard OpenBIM IFC4 file."""
+        ifc_content = IFCGenerator.generate_ifc(building)
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write(ifc_content)
+        return filepath
 
     @classmethod
     def export_2d_dxf(cls, building: BuildingModel, filepath: str, floor: int = 1) -> str:
@@ -106,6 +115,7 @@ class ExporterEngine:
             temp_dxf = os.path.join(temp_dir, "blueprint_2d.dxf")
             temp_obj = os.path.join(temp_dir, "model_3d.obj")
             temp_stl = os.path.join(temp_dir, "model_3d.stl")
+            temp_ifc = os.path.join(temp_dir, "model_3d.ifc")
             temp_html = os.path.join(temp_dir, "viewer_3d.html")
 
             cls.export_2d_png(building, temp_png)
@@ -114,6 +124,7 @@ class ExporterEngine:
             cls.export_2d_dxf(building, temp_dxf)
             cls.export_3d_obj(building, temp_obj)
             cls.export_3d_stl(building, temp_stl)
+            cls.export_3d_ifc(building, temp_ifc)
             cls.export_3d_html(building, temp_html)
 
             with zipfile.ZipFile(output_zip_path, "w") as zipf:
@@ -123,6 +134,7 @@ class ExporterEngine:
                 zipf.write(temp_dxf, arcname="blueprint_2d.dxf")
                 zipf.write(temp_obj, arcname="model_3d.obj")
                 zipf.write(temp_stl, arcname="model_3d.stl")
+                zipf.write(temp_ifc, arcname="model_3d.ifc")
                 zipf.write(temp_html, arcname="viewer_3d.html")
 
         return output_zip_path

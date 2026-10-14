@@ -477,6 +477,7 @@ def _export_file_impl(req: ExportRequest):
         "pdf":  (".pdf",  "application/pdf",        "BUILD-MATRIX_2D.pdf",              ExporterEngine.export_2d_pdf),
         "dxf":  (".dxf",  "application/dxf",        "BUILD-MATRIX_2D.dxf",              ExporterEngine.export_2d_dxf),
         "obj":  (".obj",  "model/obj",              "BUILD-MATRIX_3D.obj",              ExporterEngine.export_3d_obj),
+        "ifc":  (".ifc",  "application/x-step",     "BUILD-MATRIX_Model.ifc",           ExporterEngine.export_3d_ifc),
         "gltf": (".gltf", "model/gltf+json",        "BUILD-MATRIX_3D.gltf",             ExporterEngine.export_3d_gltf),
         "html": (".html", "text/html",              "BUILD-MATRIX_Interactive.html",    ExporterEngine.export_3d_html),
         "bundle": (".zip","application/zip",        "BUILD-MATRIX_Bundle.zip",          ExporterEngine.export_bundle_zip),

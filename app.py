@@ -1472,6 +1472,8 @@ def _export_direct(fmt: str, building: BuildingModel) -> bytes:
             ExporterEngine.export_2d_dxf(building, tmp_path, floor=1)
         elif fmt == "obj":
             ExporterEngine.export_3d_obj(building, tmp_path)
+        elif fmt == "ifc":
+            ExporterEngine.export_3d_ifc(building, tmp_path)
         elif fmt in ("bundle", "zip"):
             ExporterEngine.export_bundle_zip(building, tmp_path)
         with open(tmp_path, "rb") as f:
@@ -1681,12 +1683,12 @@ with tab_export:
     st.subheader("📥 Export Architectural Blueprints & 3D Assets")
     st.write("Download high-resolution 2D CAD blueprint drawings and 3D printable/renderable formats.")
 
-    col_e1, col_e2, col_e3, col_e4, col_e5 = st.columns(5)
+    col_e1, col_e2, col_e3, col_e4, col_e5, col_e6 = st.columns(6)
     use_turbo = "Turbo" in st.session_state.get("engine_mode", "Turbo")
 
     # 1. 2D PNG Export
     with col_e1:
-        st.markdown("#### 🖼️ 2D PNG Image")
+        st.markdown("#### 🖼️ 2D PNG")
         if "export_png_data" not in st.session_state: st.session_state.export_png_data = None
         if st.button("Generate PNG", key="btn_gen_png"):
             with st.spinner("Generating 2D PNG Blueprint..."):
@@ -1704,7 +1706,7 @@ with tab_export:
 
     # 2. 2D SVG Export
     with col_e2:
-        st.markdown("#### 📐 2D SVG Vector")
+        st.markdown("#### 📐 2D SVG")
         if "export_svg_data" not in st.session_state: st.session_state.export_svg_data = None
         if st.button("Generate SVG", key="btn_gen_svg"):
             with st.spinner("Generating 2D SVG Vector..."):
@@ -1722,7 +1724,7 @@ with tab_export:
 
     # 3. 2D PDF Document
     with col_e3:
-        st.markdown("#### 📄 2D PDF Plan")
+        st.markdown("#### 📄 2D PDF")
         if "export_pdf_data" not in st.session_state: st.session_state.export_pdf_data = None
         if st.button("Generate PDF", key="btn_gen_pdf"):
             with st.spinner("Generating 2D PDF Vector Plan..."):
@@ -1758,7 +1760,7 @@ with tab_export:
 
     # 5. 3D OBJ Mesh
     with col_e5:
-        st.markdown("#### 🧊 3D OBJ Mesh")
+        st.markdown("#### 🧊 3D OBJ")
         if "export_obj_data" not in st.session_state: st.session_state.export_obj_data = None
         if st.button("Generate OBJ", key="btn_gen_obj"):
             with st.spinner("Generating 3D OBJ Mesh..."):
@@ -1774,10 +1776,28 @@ with tab_export:
         if st.session_state.export_obj_data:
             st.download_button("⬇️ Download OBJ", st.session_state.export_obj_data, file_name="BUILD-MATRIX_3D_Model.obj", mime="model/obj", use_container_width=True)
 
+    # 6. OpenBIM IFC 4
+    with col_e6:
+        st.markdown("#### 🏛️ OpenBIM IFC")
+        if "export_ifc_data" not in st.session_state: st.session_state.export_ifc_data = None
+        if st.button("Generate IFC", key="btn_gen_ifc"):
+            with st.spinner("Generating OpenBIM IFC4 Model..."):
+                try:
+                    if use_turbo:
+                        st.session_state.export_ifc_data = _export_direct("ifc", building_model)
+                    else:
+                        st.session_state.export_ifc_data = _poll_export_task(
+                            "ifc", {"building_id": st.session_state.building_id, "format": "ifc", "floor": 1}
+                        )
+                except Exception:
+                    st.session_state.export_ifc_data = _export_direct("ifc", building_model)
+        if st.session_state.export_ifc_data:
+            st.download_button("⬇️ Download IFC", st.session_state.export_ifc_data, file_name="BUILD-MATRIX_Model.ifc", mime="application/x-step", use_container_width=True)
+
     st.divider()
 
-    col_e6, col_e7 = st.columns(2)
-    with col_e6:
+    col_e7, col_e8 = st.columns(2)
+    with col_e7:
         st.markdown("#### 📦 Full Project Package (ZIP)")
         if "zip_data" not in st.session_state:
             st.session_state.zip_data = None
