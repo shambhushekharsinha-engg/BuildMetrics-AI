@@ -27,8 +27,11 @@ try:
 except Exception:  # noqa: BLE001
     _DB_AVAILABLE = False
 
+from build_matrix.cad_dxf import DXFGenerator
 from build_matrix.drawing_2d import Blueprint2DRenderer
+from build_matrix.engineering import EngineeringEngine
 from build_matrix.exporter import ExporterEngine
+from build_matrix.geotech_engine import SEISMIC_ZONES, SOIL_PROFILES, GeotechEngine
 from build_matrix.input_handler import InputHandler
 from build_matrix.layout_engine import LayoutEngine
 from build_matrix.models import (
@@ -38,6 +41,7 @@ from build_matrix.models import (
     PlotDimensions,
 )
 from build_matrix.rendering_3d import Blueprint3DRenderer
+from build_matrix.vastu_engine import VastuEngine
 
 st.set_page_config(
     page_title="BuildMetrics AI",
@@ -768,13 +772,14 @@ with col_m5:
 st.divider()
 
 # Main Interactive Workspace Tabs
-tab_2d, tab_3d, tab_schedule, tab_eng, tab_risk, tab_eco, tab_export = st.tabs(
+tab_2d, tab_3d, tab_schedule, tab_eng, tab_risk, tab_vastu, tab_eco, tab_export = st.tabs(
     [
         "📐 2D CAD Blueprint Studio",
         "🏗️ 3D Blueprint Visualizer",
         "📋 Architectural Schedule",
-        "🧱 Structural Engineering & BOQ Costing",
+        "🧱 Structural & BOQ Costing",
         "🌦️ Scheduling & Risk Management",
+        "🧭 Vastu & Spatial Harmony",
         "🌱 Eco & Sustainability",
         "📥 Export Center",
     ]
@@ -804,7 +809,7 @@ with tab_2d:
 
     with col_view:
         # Quick Blueprint Toolbar
-        col_t1, col_t2, col_t3, col_t4 = st.columns([2.2, 1.4, 1.2, 1.2])
+        col_t1, col_t2, col_t3, col_t4, col_t5 = st.columns([1.8, 1.2, 1.0, 1.0, 1.0])
         with col_t1:
             theme_choice = st.selectbox(
                 "🎨 2D Palette",
@@ -843,6 +848,7 @@ with tab_2d:
         use_turbo = "Turbo" in st.session_state.get("engine_mode", "Turbo")
         img_bytes = None
         svg_bytes = None
+        dxf_bytes = None
         
         try:
             if use_turbo:
@@ -884,10 +890,11 @@ with tab_2d:
                         b_cache_json = json.dumps(st.session_state.building_model_cache, sort_keys=True)
                         img_bytes = render_2d_direct_cached(b_cache_json, cfg_json, selected_floor, format="png")
 
-            # Vector SVG download button
+            # Vector SVG & AutoCAD DXF download assets
             cfg_json = json.dumps(asdict(config_2d), sort_keys=True)
             b_cache_json = json.dumps(st.session_state.building_model_cache, sort_keys=True)
             svg_bytes = render_2d_direct_cached(b_cache_json, cfg_json, selected_floor, format="svg")
+            dxf_bytes = DXFGenerator.generate_dxf(building_model, floor=selected_floor).encode("utf-8")
         except Exception as _e2d:
             st.error(f"2D Blueprint rendering note: {_e2d}")
         
@@ -897,6 +904,9 @@ with tab_2d:
         with col_t4:
             if img_bytes:
                 st.download_button("📥 HD PNG", data=img_bytes, file_name=f"blueprint_f{selected_floor}.png", mime="image/png", use_container_width=True)
+        with col_t5:
+            if dxf_bytes:
+                st.download_button("📥 DXF CAD", data=dxf_bytes, file_name=f"blueprint_f{selected_floor}.dxf", mime="application/dxf", use_container_width=True)
 
         if img_bytes:
             try:
@@ -1028,22 +1038,129 @@ with tab_schedule:
 # ---------------------------------------------------------
 with tab_eng:
     st.subheader("🧱 IS 456 / ACI 318 Structural Engineering & BOQ Takeoff")
-    st.caption("Detailed structural rebar reinforcement schedules, concrete grades, and multi-currency construction cost estimates.")
+    st.caption("Structural load analysis, soil mechanics foundation design, multi-currency cost estimation, and live calibration.")
 
-    if building_model.boq_estimate:
-        boq = building_model.boq_estimate
-        st.markdown("### 💰 Bill of Quantities (BOQ) Cost Estimate")
+    # 1. Multi-Currency Selector
+    cur_options = {
+        "USD ($)": (1.0, "$"),
+        "INR (₹)": (83.5, "₹"),
+        "EUR (€)": (0.92, "€"),
+        "GBP (£)": (0.79, "£"),
+        "AED (د.إ)": (3.67, "AED "),
+        "CAD (CA$)": (1.36, "CA$"),
+        "AUD (AU$)": (1.52, "AU$"),
+    }
+    cur_col1, cur_col2 = st.columns([2, 1])
+    with cur_col1:
+        st.markdown("### 💰 Bill of Quantities (BOQ) Takeoff & Valuation")
+    with cur_col2:
+        cur_sel = st.selectbox("💱 Construction Pricing Currency", list(cur_options.keys()), key="eng_currency_select")
+    
+    cur_mult, cur_sym = cur_options[cur_sel]
+    def _c(val_usd: float) -> str:
+        return f"{cur_sym}{val_usd * cur_mult:,.2f}"
 
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            st.markdown(f'<div class="metric-card"><h4>💵 Cost (USD)</h4><h2>${boq.cost_usd:,.2f}</h2><p style="color:#94A3B8; margin:0;">Concrete: {boq.concrete_volume_m3:,.2f} m³ | Glass: {boq.glass_m2:,.2f} m²</p></div>', unsafe_allow_html=True)
-        with c2:
-            st.markdown(f'<div class="metric-card"><h4>₹ Cost (INR)</h4><h2>₹{boq.cost_inr:,.2f}</h2><p style="color:#94A3B8; margin:0;">Steel: {boq.steel_weight_tons:,.2f} Tons | Brick: {boq.brickwork_m2:,.2f} m²</p></div>', unsafe_allow_html=True)
-        with c3:
-            st.markdown(f'<div class="metric-card"><h4>€ Cost (EUR)</h4><h2>€{boq.cost_eur:,.2f}</h2><p style="color:#94A3B8; margin:0;">MEP: ${boq.mep_cost_usd:,.2f} | Floor: {boq.flooring_m2:,.2f} m²</p></div>', unsafe_allow_html=True)
+    # 2. Live Dynamic Material Rate Calibration
+    with st.expander("🎛️ Live Dynamic Material Rate Calibration (Interactive Overrides)", expanded=False):
+        st.caption("Override default benchmark rates to calibrate material costs, labor overhead, and total contractor estimates.")
+        r_col1, r_col2 = st.columns(2)
+        with r_col1:
+            rate_concrete = st.slider("Concrete Rate (USD/m³)", 70.0, 220.0, 120.0, 5.0, key="rc_conc")
+            rate_steel = st.slider("Rebar Steel Rate (USD/ton)", 600.0, 1600.0, 950.0, 25.0, key="rc_steel")
+            rate_brick = st.slider("Masonry / Blockwork (USD/m²)", 20.0, 80.0, 35.0, 2.5, key="rc_brick")
+            rate_floor = st.slider("Flooring & Tiling (USD/m²)", 20.0, 90.0, 40.0, 2.5, key="rc_floor")
+        with r_col2:
+            rate_glass = st.slider("Glazing & Windows (USD/m²)", 60.0, 250.0, 110.0, 5.0, key="rc_glass")
+            rate_mep = st.slider("MEP Services (USD/m²)", 25.0, 100.0, 45.0, 2.5, key="rc_mep")
+            labor_factor = st.slider("Labor & Contractor Overhead Multiplier", 0.75, 2.25, 1.0, 0.05, key="rc_labor")
 
-        st.divider()
+    custom_rates = {
+        "concrete_rate_usd": rate_concrete,
+        "steel_rate_usd": rate_steel,
+        "brickwork_rate_usd": rate_brick,
+        "flooring_rate_usd": rate_floor,
+        "glass_rate_usd": rate_glass,
+        "mep_rate_usd": rate_mep,
+        "labor_multiplier": labor_factor,
+    }
+    boq = EngineeringEngine.calculate_boq(building_model, rates=custom_rates)
 
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.markdown(f'<div class="metric-card"><h4>💵 Total Project Cost ({cur_sel.split()[0]})</h4><h2>{_c(boq.cost_usd)}</h2><p style="color:#94A3B8; margin:0;">Concrete: {boq.concrete_volume_m3:,.1f} m³ | Steel: {boq.steel_weight_tons:,.1f} t</p></div>', unsafe_allow_html=True)
+    with c2:
+        st.markdown(f'<div class="metric-card"><h4>🧱 Superstructure & Finishes</h4><h2>{_c((boq.brickwork_m2 * rate_brick + boq.flooring_m2 * rate_floor + boq.glass_m2 * rate_glass) * labor_factor)}</h2><p style="color:#94A3B8; margin:0;">Masonry: {boq.brickwork_m2:,.0f} m² | Glazing: {boq.glass_m2:,.0f} m²</p></div>', unsafe_allow_html=True)
+    with c3:
+        st.markdown(f'<div class="metric-card"><h4>⚡ MEP & Systems Budget</h4><h2>{_c(boq.mep_cost_usd)}</h2><p style="color:#94A3B8; margin:0;">HVAC, Plumbing, Electrical & Fire</p></div>', unsafe_allow_html=True)
+
+    st.divider()
+
+    # 3. Geotechnical Soil Quality & Foundation Engineering
+    st.markdown("### 🌍 Geotechnical Soil Quality & Foundation Engineering (IS 1904 / IBC Ch 18)")
+    st.caption("Site soil bearing capacity, foundation excavation volumetrics, and seismic hazard detailing.")
+
+    gt_col1, gt_col2 = st.columns(2)
+    with gt_col1:
+        soil_choice = st.selectbox(
+            "Site Soil Profile",
+            options=list(SOIL_PROFILES.keys()),
+            format_func=lambda s: f"{SOIL_PROFILES[s].name} (SBC: {SOIL_PROFILES[s].sbc_kpa:.0f} kPa)",
+            index=1,
+            key="gt_soil_sel",
+        )
+    with gt_col2:
+        seismic_choice = st.selectbox(
+            "IS 1893 / IBC Seismic Hazard Zone",
+            options=list(SEISMIC_ZONES.keys()),
+            index=1,
+            key="gt_seismic_sel",
+        )
+
+    geotech_report = GeotechEngine.analyze_site(building_model, soil_type=soil_choice, seismic_zone=seismic_choice)
+
+    g_m1, g_m2, g_m3, g_m4 = st.columns(4)
+    with g_m1:
+        st.metric("Safe Bearing Capacity", f"{geotech_report.soil_profile.sbc_kpa:.0f} kPa", f"Settlement: {geotech_report.soil_profile.settlement_risk}")
+    with g_m2:
+        st.metric("Foundation Type", geotech_report.soil_profile.foundation_type.split()[0], f"Depth: ≥ {geotech_report.soil_profile.min_depth_m:.1f}m below NGL")
+    with g_m3:
+        st.metric("Excavation Volume", f"{geotech_report.excavation_volume_m3:,.0f} m³", f"Footing: {geotech_report.total_footing_area_m2:,.1f} m²")
+    with g_m4:
+        st.metric(f"Foundation Civil Cost ({cur_sel.split()[0]})", _c(geotech_report.foundation_cost_usd), f"+{geotech_report.seismic_details['cost_adder_pct']:.1f}% Seismic Adder")
+
+    for adv in geotech_report.geotechnical_advisories:
+        if "⚠️" in adv:
+            st.warning(adv)
+        elif "⚡" in adv:
+            st.info(adv)
+        else:
+            st.success(adv)
+
+    st.divider()
+
+    # 4. Structural Load Distribution & Deflection Engine
+    st.markdown("### ⚡ Structural Load Distribution & Bending Moment Deflection (IS 456 / ACI 318)")
+    st.caption("Column tributary axial loads, structural safety factors, critical beam moments, and deflection serviceability limits.")
+
+    struct_health = EngineeringEngine.calculate_structural_load_distribution(building_model)
+
+    sh_col1, sh_col2, sh_col3, sh_col4 = st.columns(4)
+    with sh_col1:
+        st.metric("Structural Health Index", f"{struct_health['structural_health_index']}/100", f"Avg FS: {struct_health['average_safety_factor']:.2f}x")
+    with sh_col2:
+        st.metric("Min Column Safety Factor", f"{struct_health['min_safety_factor']:.2f}x", "Target ≥ 1.50x (IS 456)")
+    with sh_col3:
+        st.metric(f"Max Bending Moment ({struct_health['critical_beam_id']})", f"{struct_health['max_bending_moment_knm']} kN·m", f"Critical Span: {struct_health['critical_span_m']}m")
+    with sh_col4:
+        defl_status = "✅ Pass" if struct_health['deflection_pass'] else "⚠️ Deflection Exceeded"
+        st.metric("Beam Deflection Check", f"{struct_health['actual_deflection_mm']} mm", f"{defl_status} (Limit: {struct_health['allowable_deflection_mm']} mm = L/250)")
+
+    with st.expander("🔍 View Column Load Health & Tributary Safety Factors", expanded=False):
+        st.dataframe(struct_health["columns"], use_container_width=True)
+
+    st.divider()
+
+    # 5. Column & Beam Reinforcement Schedules
     col_e1, col_e2 = st.columns(2)
     with col_e1:
         st.markdown("### 🏗️ Structural Column Reinforcement Schedule")
@@ -1077,123 +1194,121 @@ with tab_eng:
         st.dataframe(sb_data, use_container_width=True)
 
     st.divider()
+
+    # 6. BOQ → MasterFormat Cost Mapping
     st.markdown("### 🔍 BOQ → MasterFormat Cost Mapping")
     st.caption("Computed quantities from this building, mapped to MasterFormat cost codes. All values derived from generated BOQ.")
     nlp_col1, nlp_col2 = st.columns([1, 2])
     with nlp_col1:
         st.info(
             "Quantities extracted directly from the generated Building Model BOQ and matched to "
-            "CSI MasterFormat 2016 Division codes. Unit rates based on IS 456 / NBC India 2024 market indices."
+            "CSI MasterFormat 2016 Division codes. Unit rates adjusted by live calibration."
         )
     with nlp_col2:
-        if building_model.boq_estimate:
-            _boq = building_model.boq_estimate
-            nlp_boq_data = [
-                {
-                    "Quantity": f"{_boq.steel_weight_tons:.2f} t",
-                    "Description": "Reinforcement Steel (TMT Fe500)",
-                    "MasterFormat": "03 21 00 - Reinforcing Steel",
-                    "Est. Cost (USD)": f"${_boq.steel_weight_tons * 820:,.0f}",
-                },
-                {
-                    "Quantity": f"{_boq.concrete_volume_m3:.2f} m³",
-                    "Description": "Cast-in-Place Concrete (M30)",
-                    "MasterFormat": "03 30 00 - Cast-in-Place Concrete",
-                    "Est. Cost (USD)": f"${_boq.concrete_volume_m3 * 125:,.0f}",
-                },
-                {
-                    "Quantity": f"{_boq.brickwork_m2:.2f} m²",
-                    "Description": "Brick / Blockwork Masonry",
-                    "MasterFormat": "04 22 00 - Concrete Unit Masonry",
-                    "Est. Cost (USD)": f"${_boq.brickwork_m2 * 48:,.0f}",
-                },
-                {
-                    "Quantity": f"{_boq.glass_m2:.2f} m²",
-                    "Description": "Windows & Glazing",
-                    "MasterFormat": "08 50 00 - Windows",
-                    "Est. Cost (USD)": f"${_boq.glass_m2 * 290:,.0f}",
-                },
-                {
-                    "Quantity": f"{_boq.flooring_m2:.2f} m²",
-                    "Description": "Floor Finishes (Ceramic Tile)",
-                    "MasterFormat": "09 65 00 - Resilient Flooring",
-                    "Est. Cost (USD)": f"${_boq.flooring_m2 * 38:,.0f}",
-                },
-                {
-                    "Quantity": "Lump Sum",
-                    "Description": "MEP Systems (Plumbing / HVAC / Elec)",
-                    "MasterFormat": "21-28 00 - MEP Systems",
-                    "Est. Cost (USD)": f"${_boq.mep_cost_usd:,.0f}",
-                },
-            ]
-            st.dataframe(nlp_boq_data, use_container_width=True)
+        nlp_boq_data = [
+            {
+                "Quantity": f"{boq.steel_weight_tons:.2f} t",
+                "Description": "Reinforcement Steel (TMT Fe500)",
+                "MasterFormat": "03 21 00 - Reinforcing Steel",
+                f"Est. Cost ({cur_sel.split()[0]})": _c(boq.steel_weight_tons * rate_steel * labor_factor),
+            },
+            {
+                "Quantity": f"{boq.concrete_volume_m3:.2f} m³",
+                "Description": "Cast-in-Place Concrete (M30)",
+                "MasterFormat": "03 30 00 - Cast-in-Place Concrete",
+                f"Est. Cost ({cur_sel.split()[0]})": _c(boq.concrete_volume_m3 * rate_concrete * labor_factor),
+            },
+            {
+                "Quantity": f"{boq.brickwork_m2:.2f} m²",
+                "Description": "Brick / Blockwork Masonry",
+                "MasterFormat": "04 22 00 - Concrete Unit Masonry",
+                f"Est. Cost ({cur_sel.split()[0]})": _c(boq.brickwork_m2 * rate_brick * labor_factor),
+            },
+            {
+                "Quantity": f"{boq.glass_m2:.2f} m²",
+                "Description": "Windows & Glazing",
+                "MasterFormat": "08 50 00 - Windows",
+                f"Est. Cost ({cur_sel.split()[0]})": _c(boq.glass_m2 * rate_glass * labor_factor),
+            },
+            {
+                "Quantity": f"{boq.flooring_m2:.2f} m²",
+                "Description": "Floor Finishes (Ceramic Tile)",
+                "MasterFormat": "09 65 00 - Resilient Flooring",
+                f"Est. Cost ({cur_sel.split()[0]})": _c(boq.flooring_m2 * rate_floor * labor_factor),
+            },
+            {
+                "Quantity": "Lump Sum",
+                "Description": "MEP Systems (Plumbing / HVAC / Elec)",
+                "MasterFormat": "21-28 00 - MEP Systems",
+                f"Est. Cost ({cur_sel.split()[0]})": _c(boq.mep_cost_usd),
+            },
+        ]
+        st.dataframe(nlp_boq_data, use_container_width=True)
 
-        st.divider()
-        st.markdown("### 💡 Value Engineering & What-If Cost Optimization Advisor")
-        st.caption("Simulate alternative materials and green construction technologies to calculate upfront CapEx savings, carbon offset, and annual utility payback.")
-        
-        if building_model.boq_estimate:
-            _boq = building_model.boq_estimate
-            ve_col1, ve_col2, ve_col3 = st.columns([1.2, 0.9, 0.9])
-            with ve_col1:
-                st.markdown("#### ⚙️ Material & Technology Levers")
-                use_green_concrete = st.checkbox(
-                    "🌿 Low-Carbon Slag Cement Concrete (M30 Green)",
-                    value=True,
-                    help="Replaces 35% Portland cement with ground granulated blast furnace slag. Lowers cement cost by 6% and carbon by 15%."
-                )
-                use_fe550d_steel = st.checkbox(
-                    "🔩 High-Ductility Fe550D TMT Rebar",
-                    value=True,
-                    help="Higher tensile strength (550 MPa vs 500 MPa) allows design cross-section optimization, reducing total required rebar weight by 8%."
-                )
-                use_solar_subsidy = st.checkbox(
-                    "☀️ Rooftop Solar PV Net-Metering (70% Roof Coverage)",
-                    value=True,
-                    help="On-site clean power generation feeds surplus into municipal grid. Generates reliable annual kilowatt-hour offset credits."
-                )
-                use_rainwater_recycle = st.checkbox(
-                    "💧 Dual-Stage Rainwater Harvesting & Filtration Tank",
-                    value=True,
-                    help="Captures roof runoff into an underground cistern for toilet flushing and landscape irrigation, cutting municipal water reliance."
-                )
+    st.divider()
 
-            # Dynamic Savings Calculation
-            steel_savings_usd = (_boq.steel_weight_tons * 820 * 0.08) if use_fe550d_steel else 0.0
-            concrete_savings_usd = (_boq.concrete_volume_m3 * 125 * 0.06) if use_green_concrete else 0.0
-            roof_area_m2 = plot_length * plot_width
-            annual_solar_kwh = roof_area_m2 * 0.7 * 0.2 * 5 * 30 * 12
-            solar_annual_savings_usd = (annual_solar_kwh * 0.12) if use_solar_subsidy else 0.0
-            rainwater_annual_L = (roof_area_m2 * 0.6 * 0.8 * 1000) if use_rainwater_recycle else 0.0
-            water_annual_savings_usd = rainwater_annual_L * 0.002
-            
-            total_capex_savings = steel_savings_usd + concrete_savings_usd
-            total_opex_savings_year = solar_annual_savings_usd + water_annual_savings_usd
-            carbon_reduction_tons = (
-                (_boq.concrete_volume_m3 * 0.15 * 0.15 if use_green_concrete else 0.0) +
-                (_boq.steel_weight_tons * 1.8 * 0.08 if use_fe550d_steel else 0.0) +
-                (annual_solar_kwh * 0.0007 if use_solar_subsidy else 0.0)
-            )
+    # 7. Value Engineering & What-If Cost Optimization (Top level - NO nested columns)
+    st.markdown("### 💡 Value Engineering & What-If Cost Optimization Advisor")
+    st.caption("Simulate alternative materials and green construction technologies to calculate upfront CapEx savings, carbon offset, and annual utility payback.")
 
-            with ve_col2:
-                st.markdown("#### 📊 Financial ROI")
-                capex_pct = (total_capex_savings / max(1, _boq.cost_usd)) * 100
-                st.metric("Upfront CapEx Savings", f"${total_capex_savings:,.0f}", delta=f"-{capex_pct:.1f}% Cost")
-                st.metric("Annual Utility Payback", f"${total_opex_savings_year:,.0f}/yr", delta="Solar + Water")
+    ve_col1, ve_col2, ve_col3 = st.columns([1.2, 0.9, 0.9])
+    with ve_col1:
+        st.markdown("#### ⚙️ Material & Technology Levers")
+        use_green_concrete = st.checkbox(
+            "🌿 Low-Carbon Slag Cement Concrete (M30 Green)",
+            value=True,
+            help="Replaces 35% Portland cement with ground granulated blast furnace slag. Lowers cement cost by 6% and carbon by 15%."
+        )
+        use_fe550d_steel = st.checkbox(
+            "🔩 High-Ductility Fe550D TMT Rebar",
+            value=True,
+            help="Higher tensile strength (550 MPa vs 500 MPa) allows design cross-section optimization, reducing total required rebar weight by 8%."
+        )
+        use_solar_subsidy = st.checkbox(
+            "☀️ Rooftop Solar PV Net-Metering (70% Roof Coverage)",
+            value=True,
+            help="On-site clean power generation feeds surplus into municipal grid. Generates reliable annual kilowatt-hour offset credits."
+        )
+        use_rainwater_recycle = st.checkbox(
+            "💧 Dual-Stage Rainwater Harvesting & Filtration Tank",
+            value=True,
+            help="Captures roof runoff into an underground cistern for toilet flushing and landscape irrigation, cutting municipal water reliance."
+        )
 
-            with ve_col3:
-                st.markdown("#### 🌱 Environmental ROI")
-                st.metric("Embodied Carbon Cut", f"{carbon_reduction_tons:.1f} tCO₂e", delta="-Eco Grade")
-                payback_yrs = 2.4 if total_opex_savings_year > 0 else 0
-                st.metric("Payback Horizon", f"{payback_yrs:.1f} Years" if payback_yrs > 0 else "N/A", delta="High Yield")
+    # Dynamic Savings Calculation
+    steel_savings_usd = (boq.steel_weight_tons * rate_steel * 0.08) if use_fe550d_steel else 0.0
+    concrete_savings_usd = (boq.concrete_volume_m3 * rate_concrete * 0.06) if use_green_concrete else 0.0
+    roof_area_m2 = plot_length * plot_width
+    annual_solar_kwh = roof_area_m2 * 0.7 * 0.2 * 5 * 30 * 12
+    solar_annual_savings_usd = (annual_solar_kwh * 0.12) if use_solar_subsidy else 0.0
+    rainwater_annual_L = (roof_area_m2 * 0.6 * 0.8 * 1000) if use_rainwater_recycle else 0.0
+    water_annual_savings_usd = rainwater_annual_L * 0.002
 
-            st.success(
-                f"🏆 **Value Engineering Spec:** By adopting these specifications, the project saves "
-                f"**${total_capex_savings:,.0f} USD** in upfront materials, offsets **{carbon_reduction_tons:.1f} tonnes of CO₂**, "
-                f"and yields **${total_opex_savings_year:,.0f} USD/year** in operating utility credits!"
-            )
-        else:
-            st.info("BOQ data not available. Generate a building first.")
+    total_capex_savings = steel_savings_usd + concrete_savings_usd
+    total_opex_savings_year = solar_annual_savings_usd + water_annual_savings_usd
+    carbon_reduction_tons = (
+        (boq.concrete_volume_m3 * 0.15 * 0.15 if use_green_concrete else 0.0) +
+        (boq.steel_weight_tons * 1.8 * 0.08 if use_fe550d_steel else 0.0) +
+        (annual_solar_kwh * 0.0007 if use_solar_subsidy else 0.0)
+    )
+
+    with ve_col2:
+        st.markdown("#### 📊 Financial ROI")
+        capex_pct = (total_capex_savings / max(1, boq.cost_usd)) * 100
+        st.metric("Upfront CapEx Savings", _c(total_capex_savings), delta=f"-{capex_pct:.1f}% Cost")
+        st.metric("Annual Utility Payback", f"{_c(total_opex_savings_year)}/yr", delta="Solar + Water")
+
+    with ve_col3:
+        st.markdown("#### 🌱 Environmental ROI")
+        st.metric("Embodied Carbon Cut", f"{carbon_reduction_tons:.1f} tCO₂e", delta="-Eco Grade")
+        payback_yrs = (total_capex_savings / max(1, total_opex_savings_year)) if total_opex_savings_year > 0 else 0
+        st.metric("Payback Horizon", f"{payback_yrs:.1f} Years" if payback_yrs > 0 else "N/A", delta="High Yield")
+
+    st.success(
+        f"🏆 **Value Engineering Spec:** By adopting these specifications, the project saves "
+        f"**{_c(total_capex_savings)}** in upfront materials, offsets **{carbon_reduction_tons:.1f} tonnes of CO₂**, "
+        f"and yields **{_c(total_opex_savings_year)}/year** in operating utility credits!"
+    )
 
 # ---------------------------------------------------------
 # TAB 5: Scheduling & Risk Management
@@ -1353,6 +1468,8 @@ def _export_direct(fmt: str, building: BuildingModel) -> bytes:
             ExporterEngine.export_2d_svg(building, tmp_path, floor=1)
         elif fmt == "pdf":
             ExporterEngine.export_2d_pdf(building, tmp_path, floor=1)
+        elif fmt == "dxf":
+            ExporterEngine.export_2d_dxf(building, tmp_path, floor=1)
         elif fmt == "obj":
             ExporterEngine.export_3d_obj(building, tmp_path)
         elif fmt in ("bundle", "zip"):
@@ -1368,6 +1485,11 @@ def _generate_spec_sheet_markdown(building: BuildingModel) -> str:
     plot = building.plot
     boq = building.boq_estimate
     total_area = sum(r.area for r in building.rooms)
+    
+    # Audit Vastu & Geotech for spec sheet
+    vastu_rep = VastuEngine.audit_building(building)
+    geotech_rep = GeotechEngine.analyze_site(building)
+
     doc = [
         "# BUILDMETRICS AI — EXECUTIVE PROJECT SPECIFICATION SHEET",
         f"**Date:** {time.strftime('%Y-%m-%d %H:%M:%S')} | **Architectural Style:** {building.style.value}",
@@ -1385,10 +1507,12 @@ def _generate_spec_sheet_markdown(building: BuildingModel) -> str:
         doc.append(f"| {r.id} | {r.name} | Level {r.floor} | {r.width:.2f}m x {r.height:.2f}m | {r.area:.2f} m² |")
 
     doc.append("")
-    doc.append("## 3. Structural Engineering Schedule (IS 456 / NBC)")
+    doc.append("## 3. Structural & Geotechnical Engineering Schedule")
     doc.append(f"- **Pillars / Columns:** {len(building.pillars)} columns (Grade M30 Concrete, Fe500 Rebar)")
     doc.append(f"- **Beams:** {len(building.beams)} longitudinal & transverse beams")
-    doc.append(f"- **Walls:** {len(building.walls)} structural load-bearing and partition walls")
+    doc.append(f"- **Foundation Type:** {geotech_rep.soil_profile.foundation_type} (SBC: {geotech_rep.soil_profile.sbc_kpa:.0f} kPa)")
+    doc.append(f"- **Excavation Volumetrics:** {geotech_rep.excavation_volume_m3:,.1f} m³ excavation | {geotech_rep.foundation_concrete_m3:,.1f} m³ concrete")
+    doc.append(f"- **Seismic Hazard Detailing:** {geotech_rep.seismic_zone} (PGA: {geotech_rep.seismic_details['pga']}g)")
 
     if boq:
         doc.extend([
@@ -1405,7 +1529,11 @@ def _generate_spec_sheet_markdown(building: BuildingModel) -> str:
 
     doc.extend([
         "",
-        "## 5. Certification & Compliance",
+        "## 5. Vastu Shastra & Spatial Harmony Audit",
+        f"- **Vastu Score:** {vastu_rep.overall_score}/100 ({vastu_rep.grade})",
+        f"- **Brahmasthan (Core):** {vastu_rep.brahmasthan_status}",
+        "",
+        "## 6. Certification & Compliance",
         "- **Building Code Standard:** NBC India 2016 / IBC 2021",
         f"- **Compliance Audit Status:** {len([a for a in getattr(building, 'annotations', []) if a.style_props.get('color') == 'red'])} Violation(s) flagged",
         "- **Sign-off:** Verified by BuildMetrics AI Autonomous Generative Engine v1.1.0",
@@ -1413,6 +1541,52 @@ def _generate_spec_sheet_markdown(building: BuildingModel) -> str:
         "*Preliminary design document. Formal architectural sign-off required prior to construction.*"
     ])
     return "\n".join(doc)
+
+# ---------------------------------------------------------
+# TAB 6: Vastu Shastra & Spatial Harmony
+# ---------------------------------------------------------
+with tab_vastu:
+    st.subheader("🧭 Vastu Shastra & Spatial Harmony Orientation Audit")
+    st.caption("9-sector Vastu Purusha Mandala directional alignment, 5 elements balance (Pancha Bhoota), and architectural remedies.")
+
+    vastu_report = VastuEngine.audit_building(building_model)
+
+    v_m1, v_m2, v_m3 = st.columns(3)
+    with v_m1:
+        st.markdown(f'<div class="metric-card"><h4>✨ Spatial Harmony Score</h4><h2>{vastu_report.overall_score}/100</h2><p style="color:#94A3B8; margin:0;">Grade: {vastu_report.grade}</p></div>', unsafe_allow_html=True)
+    with v_m2:
+        st.markdown(f'<div class="metric-card"><h4>🏛️ Brahmasthan (Core)</h4><h2>{"Clear ✅" if "Clear" in vastu_report.brahmasthan_status else "Obstructed ⚠️"}</h2><p style="color:#94A3B8; margin:0;">{vastu_report.brahmasthan_status}</p></div>', unsafe_allow_html=True)
+    with v_m3:
+        st.markdown(f'<div class="metric-card"><h4>🕉️ Auspicious Grade</h4><h2>{vastu_report.grade.split()[0]}</h2><p style="color:#94A3B8; margin:0;">{vastu_report.grade}</p></div>', unsafe_allow_html=True)
+
+    st.markdown("### 🌊 Five Elements Balance (Pancha Bhoota)")
+    e_col1, e_col2, e_col3, e_col4, e_col5 = st.columns(5)
+    el_keys = list(vastu_report.element_scores.keys())
+    for col, el in zip([e_col1, e_col2, e_col3, e_col4, e_col5], el_keys):
+        score = vastu_report.element_scores[el]
+        with col:
+            st.metric(el.split()[0], f"{score}%", el.split()[1] if len(el.split()) > 1 else "")
+            st.progress(score / 100.0)
+
+    st.divider()
+    st.markdown("### 📐 Directional Room Allocation Matrix")
+    room_audit_data = [
+        {
+            "Room ID": a.room_id,
+            "Room Name": a.room_name,
+            "Allocated Sector": a.zone,
+            "Ideal Vastu Sectors": ", ".join(a.ideal_zones[:2]),
+            "Compliance": f"{'✅ ' if a.compliance in ('Ideal', 'Favorable') else '⚠️ '}{a.compliance}",
+            "Score": f"{a.score}/100",
+            "Architectural Remedy": a.remedy,
+        }
+        for a in vastu_report.room_audits
+    ]
+    st.dataframe(room_audit_data, use_container_width=True)
+
+    st.markdown("### 🌿 Key Vastu Harmonization Recommendations")
+    for rec in vastu_report.key_recommendations:
+        st.info(rec)
 
 with tab_eco:
     st.subheader("🌱 Eco & Sustainability Analysis")
@@ -1507,7 +1681,7 @@ with tab_export:
     st.subheader("📥 Export Architectural Blueprints & 3D Assets")
     st.write("Download high-resolution 2D CAD blueprint drawings and 3D printable/renderable formats.")
 
-    col_e1, col_e2, col_e3, col_e4 = st.columns(4)
+    col_e1, col_e2, col_e3, col_e4, col_e5 = st.columns(5)
     use_turbo = "Turbo" in st.session_state.get("engine_mode", "Turbo")
 
     # 1. 2D PNG Export
@@ -1526,7 +1700,7 @@ with tab_export:
                 except Exception:
                     st.session_state.export_png_data = _export_direct("png", building_model)
         if st.session_state.export_png_data:
-            st.download_button("⬇️ Download 2D PNG", st.session_state.export_png_data, file_name="BUILD-MATRIX_2D_Blueprint.png", mime="image/png", use_container_width=True)
+            st.download_button("⬇️ Download PNG", st.session_state.export_png_data, file_name="BUILD-MATRIX_2D_Blueprint.png", mime="image/png", use_container_width=True)
 
     # 2. 2D SVG Export
     with col_e2:
@@ -1544,7 +1718,7 @@ with tab_export:
                 except Exception:
                     st.session_state.export_svg_data = _export_direct("svg", building_model)
         if st.session_state.export_svg_data:
-            st.download_button("⬇️ Download 2D SVG", st.session_state.export_svg_data, file_name="BUILD-MATRIX_2D_Blueprint.svg", mime="image/svg+xml", use_container_width=True)
+            st.download_button("⬇️ Download SVG", st.session_state.export_svg_data, file_name="BUILD-MATRIX_2D_Blueprint.svg", mime="image/svg+xml", use_container_width=True)
 
     # 3. 2D PDF Document
     with col_e3:
@@ -1562,10 +1736,28 @@ with tab_export:
                 except Exception:
                     st.session_state.export_pdf_data = _export_direct("pdf", building_model)
         if st.session_state.export_pdf_data:
-            st.download_button("⬇️ Download 2D PDF", st.session_state.export_pdf_data, file_name="BUILD-MATRIX_2D_Blueprint.pdf", mime="application/pdf", use_container_width=True)
+            st.download_button("⬇️ Download PDF", st.session_state.export_pdf_data, file_name="BUILD-MATRIX_2D_Blueprint.pdf", mime="application/pdf", use_container_width=True)
 
-    # 4. 3D OBJ Mesh
+    # 4. AutoCAD DXF Vector CAD
     with col_e4:
+        st.markdown("#### 📐 AutoCAD DXF")
+        if "export_dxf_data" not in st.session_state: st.session_state.export_dxf_data = None
+        if st.button("Generate DXF", key="btn_gen_dxf"):
+            with st.spinner("Generating AutoCAD DXF CAD Drawing..."):
+                try:
+                    if use_turbo:
+                        st.session_state.export_dxf_data = _export_direct("dxf", building_model)
+                    else:
+                        st.session_state.export_dxf_data = _poll_export_task(
+                            "dxf", {"building_id": st.session_state.building_id, "format": "dxf", "floor": 1}
+                        )
+                except Exception:
+                    st.session_state.export_dxf_data = _export_direct("dxf", building_model)
+        if st.session_state.export_dxf_data:
+            st.download_button("⬇️ Download DXF", st.session_state.export_dxf_data, file_name="BUILD-MATRIX_AutoCAD_R12.dxf", mime="application/dxf", use_container_width=True)
+
+    # 5. 3D OBJ Mesh
+    with col_e5:
         st.markdown("#### 🧊 3D OBJ Mesh")
         if "export_obj_data" not in st.session_state: st.session_state.export_obj_data = None
         if st.button("Generate OBJ", key="btn_gen_obj"):
@@ -1580,12 +1772,12 @@ with tab_export:
                 except Exception:
                     st.session_state.export_obj_data = _export_direct("obj", building_model)
         if st.session_state.export_obj_data:
-            st.download_button("⬇️ Download 3D OBJ", st.session_state.export_obj_data, file_name="BUILD-MATRIX_3D_Model.obj", mime="model/obj", use_container_width=True)
+            st.download_button("⬇️ Download OBJ", st.session_state.export_obj_data, file_name="BUILD-MATRIX_3D_Model.obj", mime="model/obj", use_container_width=True)
 
     st.divider()
 
-    col_e5, col_e6 = st.columns(2)
-    with col_e5:
+    col_e6, col_e7 = st.columns(2)
+    with col_e6:
         st.markdown("#### 📦 Full Project Package (ZIP)")
         if "zip_data" not in st.session_state:
             st.session_state.zip_data = None
@@ -1606,14 +1798,14 @@ with tab_export:
 
         if st.session_state.zip_data:
             st.download_button(
-                "📦 Download Complete Package (PNG, SVG, PDF, OBJ, HTML)",
+                "📦 Download Complete Package (PNG, SVG, PDF, DXF, OBJ, HTML)",
                 data=st.session_state.zip_data,
                 file_name="BUILD-MATRIX_Complete_Package.zip",
                 mime="application/zip",
                 use_container_width=True,
             )
 
-    with col_e6:
+    with col_e7:
         st.markdown("#### 📋 Executive Spec Sheet")
         spec_md = _generate_spec_sheet_markdown(building_model)
         st.download_button(

@@ -475,6 +475,7 @@ def _export_file_impl(req: ExportRequest):
         "png":  (".png",  "image/png",             "BUILD-MATRIX_2D.png",              ExporterEngine.export_2d_png),
         "svg":  (".svg",  "image/svg+xml",          "BUILD-MATRIX_2D.svg",              ExporterEngine.export_2d_svg),
         "pdf":  (".pdf",  "application/pdf",        "BUILD-MATRIX_2D.pdf",              ExporterEngine.export_2d_pdf),
+        "dxf":  (".dxf",  "application/dxf",        "BUILD-MATRIX_2D.dxf",              ExporterEngine.export_2d_dxf),
         "obj":  (".obj",  "model/obj",              "BUILD-MATRIX_3D.obj",              ExporterEngine.export_3d_obj),
         "gltf": (".gltf", "model/gltf+json",        "BUILD-MATRIX_3D.gltf",             ExporterEngine.export_3d_gltf),
         "html": (".html", "text/html",              "BUILD-MATRIX_Interactive.html",    ExporterEngine.export_3d_html),
@@ -489,7 +490,7 @@ def _export_file_impl(req: ExportRequest):
 
     try:
         # 2D exporters accept a `floor` kwarg; 3D / bundle ones do not
-        if req.format in ("png", "svg", "pdf"):
+        if req.format in ("png", "svg", "pdf", "dxf"):
             exporter_fn(model, path, floor=req.floor)
         else:
             exporter_fn(model, path)

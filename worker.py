@@ -61,6 +61,11 @@ def export_model_task(model_dict: dict, format: str, floor: int = 1) -> dict:
         ExporterEngine.export_2d_pdf(model, path, floor=floor)
         filename = "BUILD-MATRIX_2D.pdf"
         media_type = "application/pdf"
+    elif format == "dxf":
+        path = os.path.join(temp_dir, "blueprint.dxf")
+        ExporterEngine.export_2d_dxf(model, path, floor=floor)
+        filename = "BUILD-MATRIX_2D.dxf"
+        media_type = "application/dxf"
     elif format == "obj":
         path = os.path.join(temp_dir, "model.obj")
         ExporterEngine.export_3d_obj(model, path)

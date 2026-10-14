@@ -14,6 +14,7 @@ import tempfile
 import matplotlib.pyplot as plt
 import trimesh
 
+from .cad_dxf import DXFGenerator
 from .drawing_2d import Blueprint2DRenderer
 from .models import Blueprint2DConfig, BuildingModel
 from .rendering_3d import Blueprint3DRenderer
@@ -21,6 +22,14 @@ from .rendering_3d import Blueprint3DRenderer
 
 class ExporterEngine:
     """Handles multi-format file exports for 2D blueprints and 3D architectural assets."""
+
+    @classmethod
+    def export_2d_dxf(cls, building: BuildingModel, filepath: str, floor: int = 1) -> str:
+        """Exports 2D Blueprint to native AutoCAD DXF vector drawing."""
+        dxf_content = DXFGenerator.generate_dxf(building, floor=floor)
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write(dxf_content)
+        return filepath
 
     @classmethod
     def export_2d_png(cls, building: BuildingModel, filepath: str, floor: int = 1, config: Blueprint2DConfig | None = None) -> str:
@@ -94,6 +103,7 @@ class ExporterEngine:
             temp_png = os.path.join(temp_dir, "blueprint_2d.png")
             temp_svg = os.path.join(temp_dir, "blueprint_2d.svg")
             temp_pdf = os.path.join(temp_dir, "blueprint_2d.pdf")
+            temp_dxf = os.path.join(temp_dir, "blueprint_2d.dxf")
             temp_obj = os.path.join(temp_dir, "model_3d.obj")
             temp_stl = os.path.join(temp_dir, "model_3d.stl")
             temp_html = os.path.join(temp_dir, "viewer_3d.html")
@@ -101,6 +111,7 @@ class ExporterEngine:
             cls.export_2d_png(building, temp_png)
             cls.export_2d_svg(building, temp_svg)
             cls.export_2d_pdf(building, temp_pdf)
+            cls.export_2d_dxf(building, temp_dxf)
             cls.export_3d_obj(building, temp_obj)
             cls.export_3d_stl(building, temp_stl)
             cls.export_3d_html(building, temp_html)
@@ -109,6 +120,7 @@ class ExporterEngine:
                 zipf.write(temp_png, arcname="blueprint_2d.png")
                 zipf.write(temp_svg, arcname="blueprint_2d.svg")
                 zipf.write(temp_pdf, arcname="blueprint_2d.pdf")
+                zipf.write(temp_dxf, arcname="blueprint_2d.dxf")
                 zipf.write(temp_obj, arcname="model_3d.obj")
                 zipf.write(temp_stl, arcname="model_3d.stl")
                 zipf.write(temp_html, arcname="viewer_3d.html")

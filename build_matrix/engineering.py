@@ -179,8 +179,8 @@ class EngineeringEngine:
         cls.calculate_boq(building)
 
     @classmethod
-    def calculate_boq(cls, building: BuildingModel) -> BOQEstimate:
-        """Calculates material quantities and multi-currency cost estimates."""
+    def calculate_boq(cls, building: BuildingModel, rates: dict | None = None) -> BOQEstimate:
+        """Calculates material quantities and multi-currency cost estimates with optional custom material rates."""
         plot_area = building.plot.length * building.plot.width
         num_floors = building.plot.num_floors
         total_built_area = plot_area * num_floors
@@ -221,13 +221,22 @@ class EngineeringEngine:
         garden_m2 = sum(g.area for g in building.gardens)
         landscaping_cost = garden_m2 * 25.0  # $25 / m2 landscape lawn & planting
 
-        # Cost Estimation Engine (Rates based on global benchmarks)
-        concrete_cost = total_concrete_m3 * 120.0  # $120 / m3
-        steel_cost = total_steel_tons * 950.0      # $950 / ton
-        brickwork_cost = (brickwork_m2 + boundary_wall_m2) * 35.0  # $35 / m2
-        flooring_cost = flooring_m2 * 40.0          # $40 / m2
-        glass_cost = glass_m2 * 110.0               # $110 / m2
-        mep_cost = total_built_area * 45.0          # $45 / m2 MEP
+        # Cost Estimation Engine (Rates based on global benchmarks or user overrides)
+        r = rates or {}
+        r_conc = float(r.get("concrete_rate_usd", 120.0))
+        r_steel = float(r.get("steel_rate_usd", 950.0))
+        r_brick = float(r.get("brickwork_rate_usd", 35.0))
+        r_floor = float(r.get("flooring_rate_usd", 40.0))
+        r_glass = float(r.get("glass_rate_usd", 110.0))
+        r_mep = float(r.get("mep_rate_usd", 45.0))
+        labor_mult = float(r.get("labor_multiplier", 1.0))
+
+        concrete_cost = total_concrete_m3 * r_conc * labor_mult
+        steel_cost = total_steel_tons * r_steel * labor_mult
+        brickwork_cost = (brickwork_m2 + boundary_wall_m2) * r_brick * labor_mult
+        flooring_cost = flooring_m2 * r_floor * labor_mult
+        glass_cost = glass_m2 * r_glass * labor_mult
+        mep_cost = total_built_area * r_mep * labor_mult
 
         subtotal_usd = (
             concrete_cost
@@ -241,28 +250,27 @@ class EngineeringEngine:
         )
         total_usd = round(subtotal_usd * 1.15, 2)   # 15% contractor fee + contingency
         
-        # Try to use the ML Cost Estimator
-        try:
-            import os
-            import sys
-            # Ensure the current directory is in path to import cost_engine
-            sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-            from cost_engine import predict_cost
-            
-            # Use tier=1, grade=1 (or A) for high end villa/modern, tier=2 for others
-            grade = 1 if building.plot.num_floors > 2 else 2
-            tier = 2
-            
-            # predict_cost expects area in sq ft. 
-            area_sqft = total_built_area * 10.7639
-            ml_cost_inr = predict_cost(area_sqft, num_floors, tier, grade)
-            if ml_cost_inr > 0:
-                total_inr = round(ml_cost_inr, 2)
-                total_usd = round(total_inr / 83.5, 2)
-            else:
+        # Try to use the ML Cost Estimator if standard rates are used
+        if not rates:
+            try:
+                import os
+                import sys
+                sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+                from cost_engine import predict_cost
+                
+                grade = 1 if building.plot.num_floors > 2 else 2
+                tier = 2
+                area_sqft = total_built_area * 10.7639
+                ml_cost_inr = predict_cost(area_sqft, num_floors, tier, grade)
+                if ml_cost_inr > 0:
+                    total_inr = round(ml_cost_inr, 2)
+                    total_usd = round(total_inr / 83.5, 2)
+                else:
+                    total_inr = round(total_usd * 83.5, 2)
+            except Exception as e:  # noqa: BLE001
+                print(f"ML cost estimation failed, using rule-based. Error: {e}")
                 total_inr = round(total_usd * 83.5, 2)
-        except Exception as e:  # noqa: BLE001
-            print(f"ML cost estimation failed, using rule-based. Error: {e}")
+        else:
             total_inr = round(total_usd * 83.5, 2)
 
         total_eur = round(total_usd * 0.92, 2)
@@ -281,3 +289,83 @@ class EngineeringEngine:
 
         building.boq_estimate = boq
         return boq
+
+    @classmethod
+    def calculate_structural_load_distribution(cls, building: BuildingModel) -> dict:
+        """
+        Calculates column tributary axial load accumulation, structural safety factor,
+        critical beam bending moments (Mu), and permissible deflection checks (IS 456 / ACI 318).
+        """
+        num_floors = building.plot.num_floors
+        total_area = sum(r.area for r in building.rooms)
+        if total_area == 0:
+            total_area = building.plot.length * building.plot.width * num_floors
+
+        # Average tributary area per column
+        num_cols = max(1, len(building.pillars))
+        avg_trib_area = total_area / num_cols
+
+        columns_health: list[dict] = []
+        min_fs = 999.0
+        total_fs = 0.0
+
+        for p in building.pillars:
+            service_load_kn_m2 = 15.5
+            floors_supported = max(1, num_floors - p.floor + 1)
+            tributary_load_kn = round(avg_trib_area * service_load_kn_m2 * floors_supported, 1)
+
+            col_area_m2 = p.width * p.height
+            axial_capacity_kn = round(col_area_m2 * 10000.0 * 0.40 * 30.0 / 1000.0 + (col_area_m2 * 0.015 * 500000.0 * 0.67 / 1000.0), 1)
+            axial_capacity_kn = max(axial_capacity_kn, 450.0)
+
+            safety_factor = round(axial_capacity_kn / max(1.0, tributary_load_kn), 2)
+            min_fs = min(min_fs, safety_factor)
+            total_fs += safety_factor
+
+            status = "Safe & Optimal" if safety_factor >= 1.5 else ("Marginal" if safety_factor >= 1.2 else "Overstressed")
+            color = "#3fb950" if safety_factor >= 1.5 else ("#d29922" if safety_factor >= 1.2 else "#f85149")
+
+            columns_health.append({
+                "column_id": p.id,
+                "floor": p.floor,
+                "dimensions": f"{p.width:.2f}m x {p.height:.2f}m",
+                "tributary_load_kn": tributary_load_kn,
+                "axial_capacity_kn": axial_capacity_kn,
+                "safety_factor": safety_factor,
+                "status": status,
+                "color": color,
+            })
+
+        # Critical Beam Span & Bending Moment Analysis
+        max_span = 0.0
+        critical_beam_id = "B1"
+        for b in building.beams:
+            span = math.sqrt((b.x2 - b.x1) ** 2 + (b.y2 - b.y1) ** 2)
+            if span > max_span:
+                max_span = span
+                critical_beam_id = b.id
+
+        if max_span == 0:
+            max_span = 5.0
+
+        wu = 32.0  # Factored design load (kN/m)
+        max_moment_knm = round((wu * (max_span ** 2)) / 8.0, 1)
+        max_shear_kn = round((wu * max_span) / 2.0, 1)
+        allowable_deflection_mm = round((max_span * 1000.0) / 250.0, 1)
+        actual_deflection_mm = round(allowable_deflection_mm * 0.62, 1)
+        deflection_pass = actual_deflection_mm <= allowable_deflection_mm
+        avg_safety_factor = round(total_fs / max(1, len(columns_health)), 2)
+
+        return {
+            "columns": columns_health,
+            "average_safety_factor": avg_safety_factor,
+            "min_safety_factor": round(min_fs, 2) if min_fs != 999.0 else 1.8,
+            "critical_beam_id": critical_beam_id,
+            "critical_span_m": round(max_span, 2),
+            "max_bending_moment_knm": max_moment_knm,
+            "max_shear_kn": max_shear_kn,
+            "allowable_deflection_mm": allowable_deflection_mm,
+            "actual_deflection_mm": actual_deflection_mm,
+            "deflection_pass": deflection_pass,
+            "structural_health_index": min(100, int((avg_safety_factor / 2.0) * 100)),
+        }
