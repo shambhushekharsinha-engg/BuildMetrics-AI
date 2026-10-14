@@ -344,18 +344,89 @@ class Blueprint3DRenderer:
         body {{ margin: 0; padding: 0; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #0d1117; color: #fff; }}
         #canvas-container {{ width: 100vw; height: 100vh; display: block; }}
         
+        /* Top Floating Quick-Action Ribbon */
+        #top-quick-bar {{
+            position: absolute;
+            top: 14px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            z-index: 150;
+            background: rgba(13, 17, 23, 0.88);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            padding: 6px 12px;
+            border-radius: 30px;
+            border: 1px solid rgba(0, 240, 255, 0.45);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.7);
+            max-width: 95vw;
+            overflow-x: auto;
+        }}
+        .top-btn {{
+            background: rgba(22, 27, 34, 0.9);
+            color: #F0F6FC;
+            border: 1px solid rgba(88, 166, 255, 0.35);
+            padding: 6px 13px;
+            border-radius: 18px;
+            font-size: 11.5px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }}
+        .top-btn:hover {{
+            background: rgba(56, 189, 248, 0.25);
+            border-color: #00F0FF;
+            color: #00F0FF;
+            box-shadow: 0 0 10px rgba(0, 240, 255, 0.4);
+            transform: translateY(-1px);
+        }}
+        .top-btn.active {{
+            background: linear-gradient(135deg, #0284c7, #0369a1);
+            border-color: #38BDF8;
+            color: #ffffff;
+            box-shadow: 0 0 12px rgba(56, 189, 248, 0.6);
+        }}
+        .top-btn.snap-btn {{
+            background: rgba(16, 185, 129, 0.2);
+            border-color: rgba(16, 185, 129, 0.5);
+            color: #6ee7b7;
+        }}
+        .top-btn.snap-btn:hover {{
+            background: rgba(16, 185, 129, 0.4);
+            border-color: #10b981;
+            color: #ffffff;
+            box-shadow: 0 0 12px rgba(16, 185, 129, 0.6);
+        }}
+        .top-btn.settings-btn {{
+            background: rgba(99, 102, 241, 0.2);
+            border-color: rgba(99, 102, 241, 0.5);
+            color: #a5b4fc;
+        }}
+        .top-btn.settings-btn:hover, .top-btn.settings-btn.active {{
+            background: rgba(99, 102, 241, 0.45);
+            border-color: #818cf8;
+            color: #ffffff;
+            box-shadow: 0 0 12px rgba(99, 102, 241, 0.6);
+        }}
+
         /* Floating Collapsible HUD */
         #ui-panel {{ 
             position: absolute; 
-            top: 14px; 
+            top: 66px; 
             left: 14px; 
-            background: rgba(13, 17, 23, 0.92); 
-            backdrop-filter: blur(14px); 
-            -webkit-backdrop-filter: blur(14px);
+            background: rgba(13, 17, 23, 0.94); 
+            backdrop-filter: blur(16px); 
+            -webkit-backdrop-filter: blur(16px);
             padding: 12px 14px; 
             border-radius: 12px; 
-            border: 1px solid rgba(88, 166, 255, 0.3); 
-            box-shadow: 0 12px 32px rgba(0,0,0,0.65); 
+            border: 1px solid rgba(0, 240, 255, 0.35); 
+            box-shadow: 0 12px 36px rgba(0,0,0,0.75); 
             font-size: 12px; 
             width: 320px; 
             z-index: 100;
@@ -364,7 +435,7 @@ class Blueprint3DRenderer:
         #ui-panel.minimized {{
             width: auto;
             padding: 8px 12px;
-            background: rgba(13, 17, 23, 0.85);
+            background: rgba(13, 17, 23, 0.88);
             border-color: rgba(88, 166, 255, 0.4);
         }}
         #ui-panel.minimized .hud-body {{ display: none; }}
@@ -394,17 +465,17 @@ class Blueprint3DRenderer:
             font-weight: normal;
         }}
         .hud-toggle-btn {{
-            background: #21262d;
+            background: rgba(33, 38, 45, 0.9);
             color: #c9d1d9;
-            border: 1px solid #30363d;
+            border: 1px solid rgba(88, 166, 255, 0.3);
             border-radius: 6px;
-            padding: 3px 8px;
+            padding: 4px 10px;
             font-size: 11px;
             font-weight: 600;
             cursor: pointer;
             transition: all 0.15s;
         }}
-        .hud-toggle-btn:hover {{ background: #30363d; color: #58a6ff; }}
+        .hud-toggle-btn:hover {{ background: #30363d; color: #58a6ff; border-color: #58a6ff; }}
         
         /* Nav Tabs inside HUD */
         .hud-tabs {{
@@ -419,7 +490,7 @@ class Blueprint3DRenderer:
             background: rgba(255,255,255,0.05);
             color: #8b949e;
             border: 1px solid transparent;
-            padding: 5px 4px;
+            padding: 6px 4px;
             border-radius: 6px;
             font-size: 11px;
             font-weight: 600;
@@ -446,22 +517,33 @@ class Blueprint3DRenderer:
         .grid-3 {{ display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }}
         
         button.action-btn {{
-            background: #21262d;
-            color: #c9d1d9;
-            border: 1px solid #30363d;
-            padding: 6px 4px;
+            background: rgba(22, 27, 34, 0.95);
+            color: #F0F6FC;
+            border: 1px solid rgba(88, 166, 255, 0.4);
+            padding: 7px 5px;
             border-radius: 6px;
             cursor: pointer;
             font-size: 11px;
-            font-weight: 500;
+            font-weight: 600;
             text-align: center;
-            transition: all 0.15s;
+            transition: all 0.15s ease;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
         }}
-        button.action-btn:hover {{ background: #30363d; color: #58a6ff; border-color: #58a6ff; }}
-        button.action-btn.active {{ background: #1f6feb; color: #fff; border-color: #388bfd; box-shadow: 0 2px 6px rgba(31,111,235,0.3); font-weight: 600; }}
+        button.action-btn:hover {{
+            background: rgba(56, 189, 248, 0.25);
+            color: #00F0FF;
+            border-color: #00F0FF;
+            box-shadow: 0 0 10px rgba(0, 240, 255, 0.4);
+        }}
+        button.action-btn.active {{
+            background: linear-gradient(135deg, #0284c7, #0369a1);
+            color: #ffffff;
+            border-color: #38BDF8;
+            box-shadow: 0 2px 8px rgba(2, 132, 199, 0.5);
+            font-weight: 700;
+        }}
         
         .slider-row {{ display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 4px; }}
         .slider-row input[type="range"] {{ flex: 1; accent-color: #1f6feb; cursor: pointer; }}
@@ -512,10 +594,22 @@ class Blueprint3DRenderer:
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
 </head>
 <body>
-    <div id="ui-panel">
+    <!-- Floating Top Quick-Action Ribbon: Always visible, never obscures model -->
+    <div id="top-quick-bar">
+        <button id="quick-orbit" class="top-btn active" onclick="setCameraView('orbit')">🔄 3D Orbit</button>
+        <button id="quick-top" class="top-btn" onclick="setCameraView('top')">📐 2D Top</button>
+        <button id="quick-front" class="top-btn" onclick="setCameraView('front')">🏢 Front</button>
+        <button id="quick-walk" class="top-btn" onclick="enterWalkthrough()">🚶 Walk</button>
+        <button id="quick-roof" class="top-btn active" onclick="toggleLayer('roof')">🏠 Roof</button>
+        <button id="quick-daynight" class="top-btn" onclick="toggleDayNight()">☀️ Daylight</button>
+        <button id="quick-snap" class="top-btn snap-btn" onclick="captureSnapshot()">📸 HD Snapshot</button>
+        <button id="quick-settings" class="top-btn settings-btn" onclick="toggleHUD()">⚙️ Custom Settings</button>
+    </div>
+
+    <div id="ui-panel" class="minimized">
         <div class="hud-header">
             <div class="hud-title">📐 3D Studio <span class="hud-badge">{self.building.style.value}</span></div>
-            <button id="btn-hud-toggle" class="hud-toggle-btn" onclick="toggleHUD()">— Minimize</button>
+            <button id="btn-hud-toggle" class="hud-toggle-btn" onclick="toggleHUD()">⚙️ 3D Controls</button>
         </div>
         
         <div class="hud-body">
@@ -663,7 +757,7 @@ class Blueprint3DRenderer:
             camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
             camera.position.set(data.plot.length * 1.4, data.plot.height * 2.2, data.plot.width * 1.6);
 
-            renderer = new THREE.WebGLRenderer({{ antialias: true, alpha: true, powerPreference: 'high-performance' }});
+            renderer = new THREE.WebGLRenderer({{ antialias: true, alpha: true, powerPreference: 'high-performance', preserveDrawingBuffer: true }});
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
             renderer.shadowMap.enabled = true;
@@ -1293,6 +1387,16 @@ class Blueprint3DRenderer:
             const centerZ = data.plot.width / 2;
             const h = data.plot.height;
 
+            document.querySelectorAll('#top-quick-bar .top-btn, #ui-panel button[id^="btn-"]').forEach(b => {{
+                if (b.id && (b.id.includes('orbit') || b.id.includes('top') || b.id.includes('front') || b.id.includes('walk'))) {{
+                    b.classList.remove('active');
+                }}
+            }});
+            const qBtn = document.getElementById('quick-' + preset);
+            if (qBtn) qBtn.classList.add('active');
+            const pBtn = document.getElementById('btn-' + preset);
+            if (pBtn) pBtn.classList.add('active');
+
             if (preset === 'orbit') {{
                 camera.position.set(data.plot.length * 1.4, h * 2.2, data.plot.width * 1.6);
                 controls.target.set(centerX, h / 3, centerZ);
@@ -1314,6 +1418,12 @@ class Blueprint3DRenderer:
             const btn = document.getElementById('btn-toggle-' + layer);
             if (btn) {{
                 if (layerState[layer]) btn.classList.add('active'); else btn.classList.remove('active');
+            }}
+            if (layer === 'roof') {{
+                const qRoof = document.getElementById('quick-roof');
+                if (qRoof) {{
+                    if (layerState.roof) qRoof.classList.add('active'); else qRoof.classList.remove('active');
+                }}
             }}
 
             if (layer === 'stairs') stairsGroup.visible = layerState.stairs;
@@ -1421,12 +1531,27 @@ class Blueprint3DRenderer:
         function toggleHUD() {{
             const p = document.getElementById('ui-panel');
             const btn = document.getElementById('btn-hud-toggle');
+            const qSettings = document.getElementById('quick-settings');
             if (p.classList.contains('minimized')) {{
                 p.classList.remove('minimized');
-                btn.textContent = '— Minimize';
+                if (btn) btn.textContent = '— Minimize';
+                if (qSettings) qSettings.classList.add('active');
             }} else {{
                 p.classList.add('minimized');
-                btn.textContent = '⚙️ 3D Controls';
+                if (btn) btn.textContent = '⚙️ 3D Controls';
+                if (qSettings) qSettings.classList.remove('active');
+            }}
+        }}
+
+        let currentDayNight = 'day';
+        function toggleDayNight() {{
+            currentDayNight = (currentDayNight === 'day') ? 'golden' : (currentDayNight === 'golden' ? 'night' : 'day');
+            setLighting(currentDayNight);
+            const btn = document.getElementById('quick-daynight');
+            if (btn) {{
+                if (currentDayNight === 'day') btn.textContent = '☀️ Day';
+                else if (currentDayNight === 'golden') btn.textContent = '🌅 Sunset';
+                else btn.textContent = '🌙 Night';
             }}
         }}
 
