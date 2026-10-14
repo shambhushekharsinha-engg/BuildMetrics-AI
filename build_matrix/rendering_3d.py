@@ -327,6 +327,11 @@ class Blueprint3DRenderer:
             "style": self.building.style.value,
         }
 
+        floor_buttons = "".join(
+            f'<button id="btn-f{f}" class="action-btn" onclick="setFloorFilter({f})">Floor {f}</button>'
+            for f in range(1, plot.num_floors + 1)
+        )
+
         json_str = json.dumps(scene_data)
 
         html_code = f"""<!DOCTYPE html>
@@ -336,19 +341,171 @@ class Blueprint3DRenderer:
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Buildmetrics AI 3D Architectural Blueprint Visualizer</title>
     <style>
-        body {{ margin: 0; padding: 0; overflow: hidden; font-family: 'Segoe UI', Arial, sans-serif; background-color: #0d1117; color: #fff; }}
+        body {{ margin: 0; padding: 0; overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #0d1117; color: #fff; }}
         #canvas-container {{ width: 100vw; height: 100vh; display: block; }}
-        #ui-panel {{ position: absolute; top: 15px; left: 15px; background: rgba(13, 17, 23, 0.88); backdrop-filter: blur(10px); padding: 16px 22px; border-radius: 10px; border: 1px solid #30363d; box-shadow: 0 8px 24px rgba(0,0,0,0.6); font-size: 13px; max-width: 340px; }}
-        #ui-panel h2 {{ margin: 0 0 8px 0; font-size: 17px; color: #58a6ff; letter-spacing: 0.5px; }}
-        .control-group {{ margin-top: 10px; }}
-        .control-group label {{ display: block; font-weight: bold; margin-bottom: 4px; color: #8b949e; }}
-        .btn-group {{ display: flex; gap: 6px; }}
-        button {{ flex: 1; background: #21262d; color: #c9d1d9; border: 1px solid #30363d; padding: 6px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; transition: all 0.2s; }}
-        button:hover {{ background: #30363d; color: #58a6ff; border-color: #58a6ff; }}
-        button.active {{ background: #1f6feb; color: #fff; border-color: #388bfd; }}
-        #legend {{ position: absolute; bottom: 15px; right: 15px; background: rgba(13, 17, 23, 0.88); padding: 14px; border-radius: 8px; border: 1px solid #30363d; font-size: 11px; }}
-        .legend-item {{ display: flex; align-items: center; margin-bottom: 4px; }}
-        .legend-color {{ width: 12px; height: 12px; border-radius: 2px; margin-right: 8px; }}
+        
+        /* Floating Collapsible HUD */
+        #ui-panel {{ 
+            position: absolute; 
+            top: 14px; 
+            left: 14px; 
+            background: rgba(13, 17, 23, 0.92); 
+            backdrop-filter: blur(14px); 
+            -webkit-backdrop-filter: blur(14px);
+            padding: 12px 14px; 
+            border-radius: 12px; 
+            border: 1px solid rgba(88, 166, 255, 0.3); 
+            box-shadow: 0 12px 32px rgba(0,0,0,0.65); 
+            font-size: 12px; 
+            width: 320px; 
+            z-index: 100;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }}
+        #ui-panel.minimized {{
+            width: auto;
+            padding: 8px 12px;
+            background: rgba(13, 17, 23, 0.85);
+            border-color: rgba(88, 166, 255, 0.4);
+        }}
+        #ui-panel.minimized .hud-body {{ display: none; }}
+        
+        .hud-header {{
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }}
+        .hud-title {{
+            font-size: 13px;
+            font-weight: 700;
+            color: #58a6ff;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            letter-spacing: 0.3px;
+        }}
+        .hud-badge {{
+            font-size: 10px;
+            background: rgba(88, 166, 255, 0.15);
+            color: #79c0ff;
+            padding: 2px 6px;
+            border-radius: 10px;
+            border: 1px solid rgba(88, 166, 255, 0.25);
+            font-weight: normal;
+        }}
+        .hud-toggle-btn {{
+            background: #21262d;
+            color: #c9d1d9;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            padding: 3px 8px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.15s;
+        }}
+        .hud-toggle-btn:hover {{ background: #30363d; color: #58a6ff; }}
+        
+        /* Nav Tabs inside HUD */
+        .hud-tabs {{
+            display: flex;
+            gap: 4px;
+            margin-top: 10px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(255,255,255,0.08);
+        }}
+        .tab-btn {{
+            flex: 1;
+            background: rgba(255,255,255,0.05);
+            color: #8b949e;
+            border: 1px solid transparent;
+            padding: 5px 4px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.15s;
+        }}
+        .tab-btn:hover {{ color: #c9d1d9; background: rgba(255,255,255,0.08); }}
+        .tab-btn.active {{
+            background: #1f6feb;
+            color: #ffffff;
+            border-color: #388bfd;
+            box-shadow: 0 2px 8px rgba(31,111,235,0.4);
+        }}
+        
+        .tab-content {{ display: none; padding-top: 8px; }}
+        .tab-content.active {{ display: block; }}
+        
+        .control-group {{ margin-top: 8px; }}
+        .control-group:first-child {{ margin-top: 2px; }}
+        .control-group label {{ display: block; font-weight: 600; margin-bottom: 4px; color: #8b949e; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }}
+        
+        .grid-2 {{ display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }}
+        .grid-3 {{ display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; }}
+        
+        button.action-btn {{
+            background: #21262d;
+            color: #c9d1d9;
+            border: 1px solid #30363d;
+            padding: 6px 4px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 11px;
+            font-weight: 500;
+            text-align: center;
+            transition: all 0.15s;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }}
+        button.action-btn:hover {{ background: #30363d; color: #58a6ff; border-color: #58a6ff; }}
+        button.action-btn.active {{ background: #1f6feb; color: #fff; border-color: #388bfd; box-shadow: 0 2px 6px rgba(31,111,235,0.3); font-weight: 600; }}
+        
+        .slider-row {{ display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 4px; }}
+        .slider-row input[type="range"] {{ flex: 1; accent-color: #1f6feb; cursor: pointer; }}
+        .switch-row {{ display: flex; align-items: center; justify-content: space-between; margin-top: 6px; padding: 6px 8px; background: rgba(255,255,255,0.03); border-radius: 6px; }}
+        .switch-row label {{ cursor: pointer; display: flex; align-items: center; gap: 8px; font-weight: 500; color: #c9d1d9; font-size: 11px; margin: 0; }}
+        .switch-row input[type="checkbox"] {{ accent-color: #1f6feb; width: 14px; height: 14px; cursor: pointer; }}
+        
+        /* Dockable Legend */
+        #legend-toggle-btn {{
+            position: absolute;
+            bottom: 14px;
+            right: 14px;
+            background: rgba(13, 17, 23, 0.9);
+            border: 1px solid #30363d;
+            color: #c9d1d9;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+            cursor: pointer;
+            z-index: 90;
+            backdrop-filter: blur(10px);
+            transition: all 0.2s;
+        }}
+        #legend-toggle-btn:hover {{ background: #21262d; color: #58a6ff; border-color: #58a6ff; }}
+        #legend-card {{
+            display: none;
+            position: absolute;
+            bottom: 48px;
+            right: 14px;
+            background: rgba(13, 17, 23, 0.94);
+            padding: 12px 14px;
+            border-radius: 10px;
+            border: 1px solid #30363d;
+            font-size: 11px;
+            z-index: 95;
+            backdrop-filter: blur(12px);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+            min-width: 190px;
+        }}
+        #legend-card.open {{ display: block; }}
+        .legend-item {{ display: flex; align-items: center; margin-bottom: 5px; }}
+        .legend-item:last-child {{ margin-bottom: 0; }}
+        .legend-color {{ width: 12px; height: 12px; border-radius: 3px; margin-right: 8px; flex-shrink: 0; }}
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -356,68 +513,108 @@ class Blueprint3DRenderer:
 </head>
 <body>
     <div id="ui-panel">
-        <h2>📐 Buildmetrics AI 3D Studio</h2>
-        <div><strong>Style:</strong> <span id="style-val">{self.building.style.value}</span></div>
-        <div><strong>Plot Footprint:</strong> {plot.length:.1f}m x {plot.width:.1f}m ({plot.max_height:.1f}m H)</div>
+        <div class="hud-header">
+            <div class="hud-title">📐 3D Studio <span class="hud-badge">{self.building.style.value}</span></div>
+            <button id="btn-hud-toggle" class="hud-toggle-btn" onclick="toggleHUD()">— Minimize</button>
+        </div>
         
-        <div class="control-group">
-            <label>Render Mode:</label>
-            <div class="btn-group">
-                <button id="btn-blueprint" onclick="setRenderMode('blueprint')">Blueprint Cyan</button>
-                <button id="btn-shaded" class="active" onclick="setRenderMode('shaded')">Realistic Shaded</button>
-                <button id="btn-rebar" onclick="setRenderMode('rebar')">Steel Rods Frame</button>
-                <button id="btn-wireframe" onclick="setRenderMode('wireframe')">Wireframe</button>
+        <div class="hud-body">
+            <div style="font-size: 10px; color: #8b949e; margin-top: 4px;">Plot: {plot.length:.1f}m x {plot.width:.1f}m &bull; {plot.max_height:.1f}m H</div>
+            
+            <div class="hud-tabs">
+                <button id="tab-btn-style" class="tab-btn active" onclick="switchTab('style')">🎨 Style</button>
+                <button id="tab-btn-views" class="tab-btn" onclick="switchTab('views')">🏢 Views</button>
+                <button id="tab-btn-tools" class="tab-btn" onclick="switchTab('tools')">☀️ Tools</button>
             </div>
-        </div>
-
-        <div class="control-group">
-            <label>Toggles:</label>
-            <div class="btn-group">
-                <button id="btn-toggle-stairs" class="active" onclick="toggleLayer('stairs')">Stairs</button>
-                <button id="btn-toggle-fixtures" class="active" onclick="toggleLayer('fixtures')">Furniture</button>
-                <button id="btn-toggle-gate" class="active" onclick="toggleLayer('gate')">Main Gate</button>
-                <button id="btn-toggle-garden" class="active" onclick="toggleLayer('garden')">Garden</button>
-                <button id="btn-toggle-boundary" class="active" onclick="toggleLayer('boundary')">Boundary Wall</button>
-                <button id="btn-toggle-roof" class="active" onclick="toggleLayer('roof')">Roof</button>
+            
+            <!-- TAB 1: Style & Layers -->
+            <div id="tab-content-style" class="tab-content active">
+                <div class="control-group">
+                    <label>Render Style:</label>
+                    <div class="grid-2">
+                        <button id="btn-shaded" class="action-btn active" onclick="setRenderMode('shaded')">Realistic Shaded</button>
+                        <button id="btn-blueprint" class="action-btn" onclick="setRenderMode('blueprint')">Blueprint Cyan</button>
+                        <button id="btn-rebar" class="action-btn" onclick="setRenderMode('rebar')">TMT Rebar Rods</button>
+                        <button id="btn-wireframe" class="action-btn" onclick="setRenderMode('wireframe')">Wireframe CAD</button>
+                    </div>
+                </div>
+                
+                <div class="control-group">
+                    <label>Toggle Layers:</label>
+                    <div class="grid-2">
+                        <button id="btn-toggle-roof" class="action-btn active" onclick="toggleLayer('roof')">🏠 Roof</button>
+                        <button id="btn-toggle-stairs" class="action-btn active" onclick="toggleLayer('stairs')">🪜 Stairs</button>
+                        <button id="btn-toggle-fixtures" class="action-btn active" onclick="toggleLayer('fixtures')">🛋️ Furniture</button>
+                        <button id="btn-toggle-gate" class="action-btn active" onclick="toggleLayer('gate')">🚪 Main Gate</button>
+                        <button id="btn-toggle-garden" class="action-btn active" onclick="toggleLayer('garden')">🌳 Garden</button>
+                        <button id="btn-toggle-boundary" class="action-btn active" onclick="toggleLayer('boundary')">🧱 Boundary</button>
+                    </div>
+                </div>
             </div>
-        </div>
-
-        <div class="control-group">
-            <label>Floor Visibility:</label>
-            <div class="btn-group">
-                <button id="btn-f0" onclick="setFloorFilter(0)" class="active">All Floors</button>
-                <button id="btn-f1" onclick="setFloorFilter(1)">Floor 1</button>
-                <button id="btn-f2" onclick="setFloorFilter(2)">Floor 2</button>
+            
+            <!-- TAB 2: Floors & Cameras -->
+            <div id="tab-content-views" class="tab-content">
+                <div class="control-group">
+                    <label>Floor Isolation:</label>
+                    <div class="grid-3">
+                        <button id="btn-f0" class="action-btn active" onclick="setFloorFilter(0)">All Floors</button>
+                        {floor_buttons}
+                    </div>
+                </div>
+                
+                <div class="control-group">
+                    <label>Camera Presets:</label>
+                    <div class="grid-2">
+                        <button id="btn-orbit" class="action-btn active" onclick="setCameraView('orbit')">🔄 Orbit 3D</button>
+                        <button id="btn-top" class="action-btn" onclick="setCameraView('top')">📐 Top 2D</button>
+                        <button id="btn-front" class="action-btn" onclick="setCameraView('front')">🏢 Front View</button>
+                        <button id="btn-walkthrough" class="action-btn" onclick="enterWalkthrough()" title="WASD + Mouse">🚶 Walkthrough</button>
+                    </div>
+                </div>
             </div>
-        </div>
-
-        <div class="control-group">
-            <label>Camera:</label>
-            <div class="btn-group">
-                <button id="btn-orbit" class="active" onclick="setCameraView('orbit')">Orbit</button>
-                <button id="btn-top" onclick="setCameraView('top')">Top View</button>
-                <button id="btn-front" onclick="setCameraView('front')">Front</button>
-                <button id="btn-walkthrough" onclick="enterWalkthrough()" title="WASD + Mouse to move">🚶 Walkthrough</button>
-            </div>
-        </div>
-
-        <div class="control-group">
-            <label>Lighting Setup:</label>
-            <div class="btn-group">
-                <button id="btn-light-day" class="active" onclick="setLighting('day')">Daylight</button>
-                <button id="btn-light-golden" onclick="setLighting('golden')">Golden Hour</button>
-                <button id="btn-light-night" onclick="setLighting('night')">Night Neon</button>
+            
+            <!-- TAB 3: Daylight & Tools -->
+            <div id="tab-content-tools" class="tab-content">
+                <div class="control-group">
+                    <label>Daylighting Preset:</label>
+                    <div class="grid-3">
+                        <button id="btn-light-day" class="action-btn active" onclick="setLighting('day')">☀️ Day</button>
+                        <button id="btn-light-golden" class="action-btn" onclick="setLighting('golden')">🌅 Sunset</button>
+                        <button id="btn-light-night" class="action-btn" onclick="setLighting('night')">🌙 Night</button>
+                    </div>
+                </div>
+                
+                <div class="control-group">
+                    <label>Sun Path Angle:</label>
+                    <div class="slider-row">
+                        <span style="font-size:10px; color:#8b949e;">Dawn</span>
+                        <input type="range" id="sunPath" min="0" max="100" value="50">
+                        <span style="font-size:10px; color:#8b949e;">Dusk</span>
+                    </div>
+                </div>
+                
+                <div class="switch-row">
+                    <label><input type="checkbox" id="xrayToggle"> Transparent X-Ray</label>
+                </div>
+                
+                <div class="control-group" style="margin-top: 10px;">
+                    <button id="btn-sun-cycle" class="action-btn" style="width:100%; margin-bottom:6px;" onclick="toggleSunCycle()">▶️ Play 24h Sun Cycle</button>
+                    <button class="action-btn" style="width:100%; background:#1f6feb; color:#fff; border-color:#388bfd;" onclick="captureSnapshot()">📸 Download HD Snapshot (PNG)</button>
+                </div>
             </div>
         </div>
     </div>
 
-    <div id="legend">
-        <div class="legend-item"><div class="legend-color" style="background:#b0bec5; border:1px solid #78909c;"></div> TMT Vertical Rebar Rods</div>
+    <!-- Dockable Bottom-Right Legend -->
+    <button id="legend-toggle-btn" onclick="toggleLegend()">🎨 3D Legend</button>
+    <div id="legend-card">
+        <div style="font-weight:bold; margin-bottom:6px; color:#58a6ff;">Element Color Legend</div>
+        <div class="legend-item"><div class="legend-color" style="background:#b0bec5; border:1px solid #78909c;"></div> TMT Vertical Rebar</div>
         <div class="legend-item"><div class="legend-color" style="background:#ffb74d;"></div> Stirrup Lateral Ties</div>
         <div class="legend-item"><div class="legend-color" style="background:#81c784;"></div> Floor Slab Mesh Grid</div>
-        <div class="legend-item"><div class="legend-color" style="background:#1f6feb;"></div> Outer & Interior Walls</div>
+        <div class="legend-item"><div class="legend-color" style="background:#1f6feb;"></div> Walls (Outer/Inner)</div>
         <div class="legend-item"><div class="legend-color" style="background:#e65100;"></div> Main Gate & Posts</div>
-        <div class="legend-item"><div class="legend-color" style="background:#2e7d32;"></div> Garden Lawn & Trees</div>
+        <div class="legend-item"><div class="legend-color" style="background:#2e7d32;"></div> Garden & Landscaping</div>
     </div>
 
     <div id="webgl-lost-banner" style="display:none; position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); background:rgba(13,17,23,0.96); border:2px solid #ff7b72; border-radius:10px; padding:24px 32px; text-align:center; z-index:500; box-shadow:0 8px 32px rgba(0,0,0,0.8);">
@@ -492,48 +689,35 @@ class Blueprint3DRenderer:
             ambientLight = new THREE.AmbientLight(0xffffff, 0.55);
             scene.add(ambientLight);
             
-            const sunLight = new THREE.DirectionalLight(0xffeeb1, 0.8);
+            sunLight = new THREE.DirectionalLight(0xffeeb1, 0.8);
             sunLight.position.set(50, 100, 20);
             sunLight.castShadow = false;
             scene.add(sunLight);
             
-            // X-Ray / Section Toggle UI Overlay
-            const uiDiv = document.createElement('div');
-            uiDiv.style.position = 'absolute';
-            uiDiv.style.top = '10px';
-            uiDiv.style.right = '10px';
-            uiDiv.style.zIndex = '100';
-            uiDiv.style.background = 'rgba(0,0,0,0.7)';
-            uiDiv.style.padding = '10px';
-            uiDiv.style.borderRadius = '5px';
-            uiDiv.style.color = '#fff';
-            uiDiv.style.fontFamily = 'sans-serif';
-            uiDiv.innerHTML = `
-                <label style="cursor:pointer; display:block; margin-bottom:5px;">
-                    <input type="checkbox" id="xrayToggle"> Enable X-Ray Mode
-                </label>
-                <label style="cursor:pointer; display:block;">
-                    <input type="range" id="sunPath" min="0" max="100" value="50"> Sun Path
-                </label>
-            `;
-            container.appendChild(uiDiv);
+            const xrayEl = document.getElementById('xrayToggle');
+            if (xrayEl) {{
+                xrayEl.addEventListener('change', (e) => {{
+                    const isXray = e.target.checked;
+                    scene.traverse((child) => {{
+                        if (child.isMesh && child.material && child.material.name !== 'wireframe') {{
+                            child.material.transparent = true;
+                            child.material.opacity = isXray ? 0.35 : 1.0;
+                            child.material.needsUpdate = true;
+                        }}
+                    }});
+                }});
+            }}
             
-            document.getElementById('xrayToggle').addEventListener('change', (e) => {{
-                const isXray = e.target.checked;
-                scene.traverse((child) => {{
-                    if (child.isMesh && child.material && child.material.name !== 'wireframe') {{
-                        child.material.transparent = true;
-                        child.material.opacity = isXray ? 0.3 : 1.0;
-                        child.material.needsUpdate = true;
+            const sunPathEl = document.getElementById('sunPath');
+            if (sunPathEl) {{
+                sunPathEl.addEventListener('input', (e) => {{
+                    const val = e.target.value / 100;
+                    const angle = val * Math.PI;
+                    if (sunLight) {{
+                        sunLight.position.set(Math.cos(angle) * 100, Math.sin(angle) * 100, 20);
                     }}
                 }});
-            }});
-            
-            document.getElementById('sunPath').addEventListener('input', (e) => {{
-                const val = e.target.value / 100; // 0 to 1
-                const angle = val * Math.PI; // Sunrise to sunset
-                sunLight.position.set(Math.cos(angle) * 100, Math.sin(angle) * 100, 20);
-            }});
+            }}
 
 
             controls = new THREE.OrbitControls(camera, renderer.domElement);
@@ -1232,6 +1416,63 @@ class Blueprint3DRenderer:
                 group.add(box);
             }}
             return group;
+        }}
+
+        function toggleHUD() {{
+            const p = document.getElementById('ui-panel');
+            const btn = document.getElementById('btn-hud-toggle');
+            if (p.classList.contains('minimized')) {{
+                p.classList.remove('minimized');
+                btn.textContent = '— Minimize';
+            }} else {{
+                p.classList.add('minimized');
+                btn.textContent = '⚙️ 3D Controls';
+            }}
+        }}
+
+        function switchTab(tabId) {{
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            const b = document.getElementById('tab-btn-' + tabId);
+            const c = document.getElementById('tab-content-' + tabId);
+            if (b) b.classList.add('active');
+            if (c) c.classList.add('active');
+        }}
+
+        function toggleLegend() {{
+            const card = document.getElementById('legend-card');
+            if (card) card.classList.toggle('open');
+        }}
+
+        function captureSnapshot() {{
+            renderer.render(scene, camera);
+            const link = document.createElement('a');
+            link.download = 'buildmetrics_3d_' + (data.style || 'render').toLowerCase() + '.png';
+            link.href = renderer.domElement.toDataURL('image/png');
+            link.click();
+        }}
+
+        let sunCycleInterval = null;
+        function toggleSunCycle() {{
+            const btn = document.getElementById('btn-sun-cycle');
+            if (sunCycleInterval) {{
+                clearInterval(sunCycleInterval);
+                sunCycleInterval = null;
+                if (btn) {{ btn.textContent = '▶️ Play 24h Sun Cycle'; btn.classList.remove('active'); }}
+            }} else {{
+                if (btn) {{ btn.textContent = '⏹️ Stop Sun Cycle'; btn.classList.add('active'); }}
+                let angleDeg = 0;
+                sunCycleInterval = setInterval(() => {{
+                    angleDeg = (angleDeg + 3) % 360;
+                    const rad = (angleDeg * Math.PI) / 180;
+                    const slider = document.getElementById('sunPath');
+                    if (slider) slider.value = Math.round((angleDeg / 360) * 100);
+                    if (sunLight) {{
+                        sunLight.position.set(Math.cos(rad) * 100, Math.sin(rad) * 100, 20);
+                        sunLight.intensity = Math.max(0.05, Math.sin(rad) * 1.2);
+                    }}
+                }}, 40);
+            }}
         }}
 
         init();
