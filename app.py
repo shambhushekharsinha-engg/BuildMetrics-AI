@@ -1134,7 +1134,7 @@ with tab_eng:
         
         if building_model.boq_estimate:
             _boq = building_model.boq_estimate
-            ve_col1, ve_col2 = st.columns([1.1, 1.0])
+            ve_col1, ve_col2, ve_col3 = st.columns([1.2, 0.9, 0.9])
             with ve_col1:
                 st.markdown("#### ⚙️ Material & Technology Levers")
                 use_green_concrete = st.checkbox(
@@ -1176,16 +1176,16 @@ with tab_eng:
             )
 
             with ve_col2:
-                st.markdown("#### 📊 Projected Economic & Carbon ROI")
-                sc1, sc2 = st.columns(2)
-                with sc1:
-                    capex_pct = (total_capex_savings / max(1, _boq.cost_usd)) * 100
-                    st.metric("Upfront CapEx Savings", f"${total_capex_savings:,.0f}", delta=f"-{capex_pct:.1f}% Cost")
-                    st.metric("Annual Utility Payback", f"${total_opex_savings_year:,.0f}/yr", delta="Solar + Water")
-                with sc2:
-                    st.metric("Embodied Carbon Cut", f"{carbon_reduction_tons:.1f} tCO₂e", delta="-Eco Grade")
-                    payback_yrs = 2.4 if total_opex_savings_year > 0 else 0
-                    st.metric("Payback Horizon", f"{payback_yrs:.1f} Years" if payback_yrs > 0 else "N/A", delta="High Yield")
+                st.markdown("#### 📊 Financial ROI")
+                capex_pct = (total_capex_savings / max(1, _boq.cost_usd)) * 100
+                st.metric("Upfront CapEx Savings", f"${total_capex_savings:,.0f}", delta=f"-{capex_pct:.1f}% Cost")
+                st.metric("Annual Utility Payback", f"${total_opex_savings_year:,.0f}/yr", delta="Solar + Water")
+
+            with ve_col3:
+                st.markdown("#### 🌱 Environmental ROI")
+                st.metric("Embodied Carbon Cut", f"{carbon_reduction_tons:.1f} tCO₂e", delta="-Eco Grade")
+                payback_yrs = 2.4 if total_opex_savings_year > 0 else 0
+                st.metric("Payback Horizon", f"{payback_yrs:.1f} Years" if payback_yrs > 0 else "N/A", delta="High Yield")
 
             st.success(
                 f"🏆 **Value Engineering Spec:** By adopting these specifications, the project saves "
