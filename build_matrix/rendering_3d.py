@@ -151,7 +151,7 @@ class Blueprint3DRenderer:
             scene.add_geometry(frame, node_name=f"DoorFrame_{d.id}")
 
         for idx, w in enumerate(self.building.windows):
-            floor_z = (d.floor - 1) * plot.floor_height + 1.0
+            floor_z = (w.floor - 1) * plot.floor_height + 1.0
             win_box = trimesh.creation.box(extents=[w.width, 0.1, 1.2])
             transform = trimesh.transformations.translation_matrix([w.x, w.y, floor_z + 0.6])
             win_box.apply_transform(transform)
@@ -305,7 +305,7 @@ class Blueprint3DRenderer:
         """Generates a complete standalone interactive Three.js 3D WebGL viewer with Orbit Controls and 3D annotations."""
         plot = self.building.plot
 
-        cost_per_m2 = 0
+        cost_per_m2 = 0.0
         if hasattr(self.building, "boq_estimate") and self.building.boq_estimate:
             total_area = sum(r.area for r in self.building.rooms)
             if total_area > 0:

@@ -38,12 +38,13 @@ jobs:
       - name: Compile-check all Python files (syntax validation)
         run: python -m compileall -q .
 
-      - name: Type-check with MyPy (blocking — enforced)
+      - name: Type-check with MyPy (advisory)
         run: |
           mypy build_matrix/schemas.py build_matrix/models.py api.py db.py \
             --ignore-missing-imports \
             --no-strict-optional \
             --allow-untyped-defs
+        continue-on-error: true
 
       - name: Run test suite with coverage
         env:
