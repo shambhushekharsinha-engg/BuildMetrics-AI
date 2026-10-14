@@ -107,8 +107,8 @@ def render_2d_direct_cached(building_cache_json: str, config_json: str, floor: i
     model = TypeAdapter(BuildingModel).validate_json(building_cache_json)
     cfg_dict = json.loads(config_json)
     config = Blueprint2DConfig(**cfg_dict)
-    renderer = Blueprint2DRenderer(building=model, config=config)
-    fig = renderer.render_floor_plan(floor=floor)
+    renderer = Blueprint2DRenderer(config=config)
+    fig = renderer.render(model, floor=floor)
     buf = io.BytesIO()
     if format == "svg":
         fig.savefig(buf, format="svg", bbox_inches="tight")
@@ -892,9 +892,11 @@ with tab_2d:
             st.error(f"2D Blueprint rendering note: {_e2d}")
         
         with col_t3:
-            st.download_button("📥 SVG Vector", data=svg_bytes, file_name=f"blueprint_f{selected_floor}.svg", mime="image/svg+xml", use_container_width=True)
+            if svg_bytes:
+                st.download_button("📥 SVG Vector", data=svg_bytes, file_name=f"blueprint_f{selected_floor}.svg", mime="image/svg+xml", use_container_width=True)
         with col_t4:
-            st.download_button("📥 HD PNG", data=img_bytes, file_name=f"blueprint_f{selected_floor}.png", mime="image/png", use_container_width=True)
+            if img_bytes:
+                st.download_button("📥 HD PNG", data=img_bytes, file_name=f"blueprint_f{selected_floor}.png", mime="image/png", use_container_width=True)
 
         if img_bytes:
             try:
