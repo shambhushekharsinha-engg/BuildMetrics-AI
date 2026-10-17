@@ -41,7 +41,6 @@ def test_generate_and_roundtrip():
     assert "building_id" in data
     assert "model" in data
 
-    building_id = data["building_id"]
     serialized_model = data["model"]
 
     # Test deserialization roundtrip - ensures Enums are not silently broken
@@ -49,8 +48,6 @@ def test_generate_and_roundtrip():
     assert reconstructed_model.style == ArchitecturalStyle.MODERN
     assert reconstructed_model.plot.num_floors == 3
     assert reconstructed_model.plot.length == 30.0
-
-    return building_id, serialized_model
 
 
 def test_generate_invalid_style():

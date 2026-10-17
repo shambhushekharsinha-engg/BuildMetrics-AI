@@ -156,11 +156,12 @@ def fetch_3d_html_cached(building_id: str):
     resp.raise_for_status()
     return resp.text
 
+@st.cache_data(ttl=60, show_spinner=False)
 def _check_api_health_latency() -> tuple[bool, float]:
-    """Quick liveness and latency check for the FastAPI backend."""
+    """Quick liveness and latency check for the FastAPI backend (cached 60s)."""
     t0 = time.time()
     try:
-        resp = requests.get(f"{API_BASE_URL}/healthz", timeout=2.0)
+        resp = requests.get(f"{API_BASE_URL}/healthz", timeout=1.5)
         return (resp.status_code == 200, (time.time() - t0) * 1000)
     except Exception:  # noqa: BLE001
         return (False, 0.0)
@@ -170,12 +171,32 @@ def _check_api_health() -> bool:
     ok, _ = _check_api_health_latency()
     return ok
 
+@st.cache_data(show_spinner=False)
+def cached_parse_prompt(prompt_text: str) -> dict:
+    """Cached prompt parsing wrapper."""
+    return InputHandler.parse_prompt(prompt_text)
+
 if 'user_id' not in st.session_state:
     st.session_state.user_id = None
 if 'username' not in st.session_state:
     st.session_state.username = None
 if 'chat_history' not in st.session_state:
     st.session_state.chat_history = []
+if 'design_history' not in st.session_state:
+    st.session_state.design_history = []
+if 'wd' not in st.session_state:
+    st.session_state.wd = {
+        "prompt": "Modern 2-story villa with living room, master bedroom, 2 guest bedrooms, kitchen, 6 pillars, wide balcony, main gate, and front garden area",
+        "style": "Modern",
+        "plot_length": 20.0, "plot_width": 15.0, "num_floors": 2, "max_height": 9.0,
+        "wall_thickness": 25, "margin": 2.0,
+        "gate": "Double Swing Gate", "garden": "Front Garden & Lawn",
+        "theme": "Classic Blueprint",
+        "show_dims": True, "show_pillars": True, "show_beams": True, "show_stairs": True,
+        "show_labels": True, "show_fixtures": True, "show_axis": True, "show_hatches": True,
+        "show_compass": True, "show_boundary": True, "show_title": True, "show_pathway": True,
+        "show_gate": False, "show_garden_toggle": False
+    }
 
 # Run DB migrations once (non-fatal if DB unavailable)
 if _DB_AVAILABLE:
@@ -355,54 +376,113 @@ st.session_state.session_expiry = __import__("time").time() + 3600
 
 with st.sidebar.expander("🤖 Agentic Architect Chat", expanded=True):
     st.caption("💬 Ask the AI Architect to dynamically alter rooms, dimensions, or features.")
-    for msg in st.session_state.chat_history:
-        st.markdown(f"**{msg['role'].capitalize()}**: {msg['content']}")
+    _chat_box = st.container(height=240)
+    with _chat_box:
+        if not st.session_state.chat_history:
+            st.info("💡 Try typing: *'Make it 3 floors'*, *'Plot width 30m with pool'*, or *'Luxury villa 4 BHK'*")
+        for _msg in st.session_state.chat_history:
+            _role_badge = "🧑 You" if _msg["role"] == "user" else "🤖 Architect"
+            st.markdown(f"**{_role_badge}**: {_msg['content']}")
     
-    ai_input = st.text_input("Ask AI...", placeholder="e.g., Make plot width 30m and add a pool")
-    if st.button("💬 Send to Architect", use_container_width=True) and ai_input:
-        st.session_state.chat_history.append({"role": "user", "content": ai_input})
+    with st.form("agentic_chat_form", clear_on_submit=True):
+        ai_input = st.text_input("Command or Request...", placeholder="e.g. Make it 3 floors, 30m wide with pool", label_visibility="collapsed")
+        chat_submitted = st.form_submit_button("💬 Send Instruction (Enter)", use_container_width=True)
+    
+    if chat_submitted and ai_input and ai_input.strip():
+        user_text = ai_input.strip()
+        st.session_state.chat_history.append({"role": "user", "content": user_text})
+        wd = st.session_state.wd
 
-        try:
-            import google.generativeai as genai
-            genai.configure(api_key=os.environ.get("GEMINI_API_KEY", ""))
-            model = genai.GenerativeModel("gemini-2.5-flash")
-            # Use real newlines (not escaped \n literals)
-            chat_context = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history])
-            sys_prompt = f"You are an AI architect. The user is updating a building layout. Current prompt: '{st.session_state.get('prompt_parsed', {}).get('raw_prompt', '')}'. Respond briefly with the new updated prompt instruction based on their request. Do not explain."
-            response = model.generate_content(f"{sys_prompt}\n\nChat:\n{chat_context}")
-            new_instruction = response.text.strip()
-            st.session_state.chat_history.append({"role": "assistant", "content": f"Understood. I will redesign based on: {new_instruction}..."})
+        # 1. Attempt Gemini 2.5 Flash if API key is provided and valid
+        new_instruction = None
+        api_key = os.environ.get("GEMINI_API_KEY", "")
+        if api_key and not api_key.startswith("dummy") and api_key not in ("dummy_test_key", "test"):
+            try:
+                import google.generativeai as genai
+                genai.configure(api_key=api_key)
+                model = genai.GenerativeModel("gemini-2.5-flash")
+                chat_context = "\n".join([f"{m['role']}: {m['content']}" for m in st.session_state.chat_history[-6:]])
+                sys_prompt = (
+                    "You are an expert AI Architect updating an architectural building layout.\n"
+                    f"Current prompt: '{wd.get('prompt', '')}'\n"
+                    f"Current specs: {wd.get('num_floors')} floors, {wd.get('plot_length')}m x {wd.get('plot_width')}m, Style: {wd.get('style')}.\n"
+                    f"User request: '{user_text}'.\n"
+                    "Respond with ONLY the updated prompt instruction describing the complete redesigned building. "
+                    "Explicitly state updated floors (e.g. '3-story' or '3 floors'), dimensions, rooms, and features. "
+                    "Do NOT include conversational preamble."
+                )
+                response = model.generate_content(f"{sys_prompt}\n\nChat:\n{chat_context}", request_options={"timeout": 4.0})
+                if response and response.text:
+                    new_instruction = response.text.strip()
+            except Exception as _ai_err:  # noqa: BLE001
+                pass
 
-            # Capture snapshot before regeneration for diff view
-            if "building_model_cache" in st.session_state:
-                from collections import Counter
-                prev_model = TypeAdapter(BuildingModel).validate_python(st.session_state.building_model_cache)
-                cost_usd = prev_model.boq_estimate.cost_usd if prev_model.boq_estimate else 0
-                total_built = sum(prev_model.total_building_area(f) for f in range(1, prev_model.plot.num_floors + 1))
-                base_days = 90 + (prev_model.plot.num_floors * 45)
-                total_days = base_days + int(base_days * 0.18)
-                compliance_issues = sum(1 for a in prev_model.annotations if a.category == 'compliance_tag' and a.style_props.get('color') == 'red')
+        # 2. Local Intelligent Rule-Based Architect Fallback (100% reliable offline/fast)
+        if not new_instruction:
+            curr_prompt = wd.get("prompt", "")
+            new_instruction = f"{curr_prompt.rstrip('. ')}. Redesign requirement: {user_text}"
 
-                room_counts = Counter((r.room_type.lower(), r.floor) for r in prev_model.rooms)
-                room_areas = {(r.room_type.lower(), r.floor): r.area for r in prev_model.rooms}
+        # 3. Synchronize concrete constraints (Floors, Dimensions, Style, Rooms) into wd & session state
+        parsed_update = InputHandler.parse_prompt(new_instruction)
+        direct_parsed = InputHandler._parse_prompt_regex(user_text)
 
-                st.session_state.pre_gen_snapshot = {
-                    "cost": cost_usd,
-                    "area": total_built,
-                    "days": total_days,
-                    "compliance": compliance_issues,
-                    "room_counts": dict(room_counts),
-                    "room_areas": room_areas,
-                    "new_instruction": new_instruction
-                }
-                st.session_state.pending_ai_diff = True
+        # Update floors
+        target_floors = direct_parsed.get("num_floors") or parsed_update.get("num_floors")
+        if target_floors and target_floors >= 1:
+            wd["num_floors"] = int(target_floors)
+            st.session_state["cfg_num_floors"] = wd["num_floors"]
 
-            # Override the manual prompt and trigger regeneration
-            st.session_state.ai_override_prompt = new_instruction
-            st.session_state.force_generate = True
-            st.rerun()
-        except Exception as e:  # noqa: BLE001
-            st.error(f"AI Error: {e!s}", icon="🤖")
+        # Update dimensions
+        target_len = direct_parsed.get("explicit_length") or parsed_update.get("explicit_length")
+        if target_len and target_len >= 5.0:
+            wd["plot_length"] = float(target_len)
+            st.session_state["cfg_plot_length"] = wd["plot_length"]
+
+        target_wid = direct_parsed.get("explicit_width") or parsed_update.get("explicit_width")
+        if target_wid and target_wid >= 5.0:
+            wd["plot_width"] = float(target_wid)
+            st.session_state["cfg_plot_width"] = wd["plot_width"]
+
+        # Update style
+        target_style = direct_parsed.get("style") or parsed_update.get("style")
+        if target_style:
+            wd["style"] = target_style.value
+            st.session_state["cfg_style"] = wd["style"]
+
+        wd["prompt"] = new_instruction
+        st.session_state["cfg_prompt"] = new_instruction
+
+        # 4. Snapshot before regeneration for diff view
+        if "building_model_cache" in st.session_state:
+            from collections import Counter
+            prev_model = TypeAdapter(BuildingModel).validate_python(st.session_state.building_model_cache)
+            cost_usd = prev_model.boq_estimate.cost_usd if prev_model.boq_estimate else 0
+            total_built = sum(prev_model.total_building_area(f) for f in range(1, prev_model.plot.num_floors + 1))
+            base_days = 90 + (prev_model.plot.num_floors * 45)
+            total_days = base_days + int(base_days * 0.18)
+            compliance_issues = sum(1 for a in prev_model.annotations if a.category == 'compliance_tag' and a.style_props.get('color') == 'red')
+
+            room_counts = Counter((r.room_type.lower(), r.floor) for r in prev_model.rooms)
+            room_areas = {(r.room_type.lower(), r.floor): r.area for r in prev_model.rooms}
+
+            st.session_state.pre_gen_snapshot = {
+                "cost": cost_usd,
+                "area": total_built,
+                "days": total_days,
+                "compliance": compliance_issues,
+                "room_counts": dict(room_counts),
+                "room_areas": room_areas,
+                "new_instruction": user_text
+            }
+            st.session_state.pending_ai_diff = True
+
+        st.session_state.chat_history.append({
+            "role": "assistant",
+            "content": f"Understood! Redesigning for {wd['num_floors']} floors ({wd['plot_length']:.1f}m x {wd['plot_width']:.1f}m, {wd['style']}). Applying layout optimization..."
+        })
+
+        st.session_state.force_generate = True
+        st.rerun()
 
 # Design History revert & comparison panel
 if st.session_state.get('design_history'):
@@ -433,24 +513,6 @@ if st.session_state.get("building_id"):
             except Exception as _sh_err:  # noqa: BLE001
                 st.error(f"Share token error: {_sh_err}")
 
-if "wd" not in st.session_state:
-    st.session_state.wd = {
-        "prompt": "Modern 2-story villa with living room, master bedroom, 2 guest bedrooms, kitchen, 6 pillars, wide balcony, main gate, and front garden area",
-        "style": "Modern",
-        "plot_length": 20.0, "plot_width": 15.0, "num_floors": 2, "max_height": 9.0,
-        "wall_thickness": 25, "margin": 2.0,
-        "gate": "Double Swing Gate", "garden": "Front Garden & Lawn",
-        "theme": "Classic Blueprint",
-        "show_dims": True, "show_pillars": True, "show_beams": True, "show_stairs": True,
-        "show_labels": True, "show_fixtures": True, "show_axis": True, "show_hatches": True,
-        "show_compass": True, "show_boundary": True, "show_title": True, "show_pathway": True,
-        "show_gate": False, "show_garden_toggle": False
-    }
-
-if 'design_history' not in st.session_state:
-    st.session_state.design_history = []  # list of dicts: {model, inputs, label}
-
-
 wd = st.session_state.wd
 
 if "ai_override_prompt" in st.session_state and st.session_state.ai_override_prompt:
@@ -464,57 +526,100 @@ with wizard_tabs[0]:
     st.subheader("Plot Dimensions")
     col_p1, col_p2 = st.columns(2)
     with col_p1:
-        wd["plot_length"] = st.number_input("Length (X) [m]", min_value=5.0, max_value=1000.0, value=wd["plot_length"], step=1.0)
-        wd["num_floors"] = st.number_input("Floors", min_value=1, max_value=100, value=wd["num_floors"], step=1)
+        wd["plot_length"] = float(st.number_input("Length (X) [m]", min_value=5.0, max_value=1000.0, value=float(wd["plot_length"]), step=1.0, key="cfg_plot_length"))
+        wd["num_floors"] = int(st.number_input("Floors", min_value=1, max_value=100, value=int(wd["num_floors"]), step=1, key="cfg_num_floors"))
     with col_p2:
-        wd["plot_width"] = st.number_input("Width (Y) [m]", min_value=5.0, max_value=1000.0, value=wd["plot_width"], step=1.0)
-        wd["max_height"] = st.number_input("Max Height [m]", min_value=3.0, max_value=350.0, value=wd["max_height"], step=0.5)
+        wd["plot_width"] = float(st.number_input("Width (Y) [m]", min_value=5.0, max_value=1000.0, value=float(wd["plot_width"]), step=1.0, key="cfg_plot_width"))
+        wd["max_height"] = float(st.number_input("Max Height [m]", min_value=3.0, max_value=350.0, value=float(wd["max_height"]), step=0.5, key="cfg_max_height"))
 
     col_p3, col_p4 = st.columns(2)
     with col_p3:
-        wd["wall_thickness"] = st.number_input("Wall Thick [cm]", min_value=10, max_value=100, value=wd["wall_thickness"], step=5)
+        wd["wall_thickness"] = int(st.number_input("Wall Thick [cm]", min_value=10, max_value=100, value=int(wd["wall_thickness"]), step=5, key="cfg_wall_thickness"))
     with col_p4:
-        wd["margin"] = st.number_input("Setback [m]", min_value=0.0, max_value=50.0, value=wd["margin"], step=0.5)
+        wd["margin"] = float(st.number_input("Setback [m]", min_value=0.0, max_value=50.0, value=float(wd["margin"]), step=0.5, key="cfg_margin"))
 
 with wizard_tabs[1]:
     st.subheader("Building Requirements")
-    wd["prompt"] = st.text_area("Design Prompt", value=wd["prompt"], height=100, help="Specify rooms, layout, features.")
+    wd["prompt"] = st.text_area("Design Prompt", value=wd["prompt"], height=100, help="Specify rooms, layout, features.", key="cfg_prompt")
     
-    wd["gate"] = st.selectbox("Main Gate Type", options=["Double Swing Gate", "Sliding Gate", "Modern Slat Gate", "Wrought Iron Gate"], index=["Double Swing Gate", "Sliding Gate", "Modern Slat Gate", "Wrought Iron Gate"].index(wd["gate"]))
-    wd["garden"] = st.selectbox("Garden Layout", options=["Front Garden & Lawn", "Courtyard Garden", "Wrap-around Garden"], index=["Front Garden & Lawn", "Courtyard Garden", "Wrap-around Garden"].index(wd["garden"]))
+    gate_opts = ["Double Swing Gate", "Sliding Gate", "Modern Slat Gate", "Wrought Iron Gate"]
+    _g_idx = gate_opts.index(wd["gate"]) if wd["gate"] in gate_opts else 0
+    wd["gate"] = st.selectbox("Main Gate Type", options=gate_opts, index=_g_idx, key="cfg_gate")
+    
+    garden_opts = ["Front Garden & Lawn", "Courtyard Garden", "Wrap-around Garden"]
+    _gd_idx = garden_opts.index(wd["garden"]) if wd["garden"] in garden_opts else 0
+    wd["garden"] = st.selectbox("Garden Layout", options=garden_opts, index=_gd_idx, key="cfg_garden")
 
 with wizard_tabs[2]:
     st.subheader("Architectural Style & 2D Options")
     
     style_options = [s.value for s in ArchitecturalStyle]
     if wd["style"] not in style_options: wd["style"] = style_options[0]
-    wd["style"] = st.selectbox("Style", options=style_options, index=style_options.index(wd["style"]))
+    wd["style"] = st.selectbox("Style", options=style_options, index=style_options.index(wd["style"]), key="cfg_style")
     
-    wd["theme"] = st.selectbox("2D Theme", options=["Classic Blueprint", "Architectural Dark", "Paper White", "Japandi Earth", "Scandinavian Light", "Tropical Emerald"], index=["Classic Blueprint", "Architectural Dark", "Paper White", "Japandi Earth", "Scandinavian Light", "Tropical Emerald"].index(wd["theme"]))
+    theme_opts = ["Classic Blueprint", "Architectural Dark", "Paper White", "Japandi Earth", "Scandinavian Light", "Tropical Emerald"]
+    _th_idx = theme_opts.index(wd["theme"]) if wd["theme"] in theme_opts else 0
+    wd["theme"] = st.selectbox("2D Theme", options=theme_opts, index=_th_idx, key="cfg_theme")
     
     c1, c2 = st.columns(2)
     with c1:
-        wd["show_dims"] = st.checkbox("Dimensions", value=wd["show_dims"])
-        wd["show_pillars"] = st.checkbox("Pillars", value=wd["show_pillars"])
-        wd["show_beams"] = st.checkbox("Beams", value=wd["show_beams"])
-        wd["show_stairs"] = st.checkbox("Stairs", value=wd["show_stairs"])
-        wd["show_gate"] = st.checkbox("Main Gate", value=wd["show_gate"])
+        wd["show_dims"] = st.checkbox("Dimensions", value=wd["show_dims"], key="chk_dims")
+        wd["show_pillars"] = st.checkbox("Pillars", value=wd["show_pillars"], key="chk_pillars")
+        wd["show_beams"] = st.checkbox("Beams", value=wd["show_beams"], key="chk_beams")
+        wd["show_stairs"] = st.checkbox("Stairs", value=wd["show_stairs"], key="chk_stairs")
+        wd["show_gate"] = st.checkbox("Main Gate", value=wd["show_gate"], key="chk_gate")
     with c2:
-        wd["show_labels"] = st.checkbox("Room Labels", value=wd["show_labels"])
-        wd["show_fixtures"] = st.checkbox("Furniture", value=wd["show_fixtures"])
-        wd["show_axis"] = st.checkbox("Axis Grid", value=wd["show_axis"])
-        wd["show_hatches"] = st.checkbox("Wall Hatches", value=wd["show_hatches"])
-        wd["show_garden_toggle"] = st.checkbox("Garden", value=wd["show_garden_toggle"])
+        wd["show_labels"] = st.checkbox("Room Labels", value=wd["show_labels"], key="chk_labels")
+        wd["show_fixtures"] = st.checkbox("Furniture", value=wd["show_fixtures"], key="chk_fixtures")
+        wd["show_axis"] = st.checkbox("Axis Grid", value=wd["show_axis"], key="chk_axis")
+        wd["show_hatches"] = st.checkbox("Wall Hatches", value=wd["show_hatches"], key="chk_hatches")
+        wd["show_garden_toggle"] = st.checkbox("Garden", value=wd["show_garden_toggle"], key="chk_garden")
     
     c3, c4 = st.columns(2)
     with c3:
-        wd["show_compass"] = st.checkbox("Compass", value=wd["show_compass"])
-        wd["show_boundary"] = st.checkbox("Boundary", value=wd["show_boundary"])
+        wd["show_compass"] = st.checkbox("Compass", value=wd["show_compass"], key="chk_compass")
+        wd["show_boundary"] = st.checkbox("Boundary", value=wd["show_boundary"], key="chk_boundary")
     with c4:
-        wd["show_title"] = st.checkbox("Title Block", value=wd["show_title"])
-        wd["show_pathway"] = st.checkbox("Pathway", value=wd["show_pathway"])
+        wd["show_title"] = st.checkbox("Title Block", value=wd["show_title"], key="chk_title")
+        wd["show_pathway"] = st.checkbox("Pathway", value=wd["show_pathway"], key="chk_pathway")
 
-prompt_parsed = InputHandler.parse_prompt(wd["prompt"])
+# 🎛️ Live Blueprint & Area Tuner (Instant synchronous editing of levels & rooms)
+with st.sidebar.expander("🎛️ Live Floor & Area Tuner", expanded=False):
+    st.caption("Synchronously tune floor levels and room configurations with real-time propagation across all tabs.")
+    _col_fl1, _col_fl2 = st.columns([1.5, 1.5])
+    with _col_fl1:
+        if st.button("➕ Add Floor Level", key="quick_add_fl_btn", use_container_width=True):
+            wd["num_floors"] = min(100, int(wd["num_floors"]) + 1)
+            st.session_state["cfg_num_floors"] = wd["num_floors"]
+            st.session_state.force_generate = True
+            st.rerun()
+    with _col_fl2:
+        if st.button("➖ Remove Floor", key="quick_sub_fl_btn", use_container_width=True) and int(wd["num_floors"]) > 1:
+            wd["num_floors"] = max(1, int(wd["num_floors"]) - 1)
+            st.session_state["cfg_num_floors"] = wd["num_floors"]
+            st.session_state.force_generate = True
+            st.rerun()
+
+    _quick_floors = st.slider("Total Levels / Floors", min_value=1, max_value=15, value=int(wd["num_floors"]), key="slider_quick_floors")
+    if _quick_floors != int(wd["num_floors"]):
+        wd["num_floors"] = _quick_floors
+        st.session_state["cfg_num_floors"] = _quick_floors
+        st.session_state.force_generate = True
+        st.rerun()
+
+    if "building_model_cache" in st.session_state:
+        try:
+            _cur_model = TypeAdapter(BuildingModel).validate_python(st.session_state.building_model_cache)
+            _t_floor = st.selectbox("Inspect Floor Rooms", list(range(1, _cur_model.plot.num_floors + 1)), format_func=lambda f: f"Floor {f}", key="tuner_fl_inspect")
+            _f_rooms = [r for r in _cur_model.rooms if r.floor == _t_floor]
+            if _f_rooms:
+                st.caption(f"Rooms on Floor {_t_floor} ({len(_f_rooms)} rooms):")
+                for _r in _f_rooms:
+                    st.write(f"• **{_r.name}**: {_r.width:.1f}m x {_r.height:.1f}m (**{_r.area:.1f} m²**)")
+        except Exception:
+            pass
+
+prompt_parsed = cached_parse_prompt(wd["prompt"])
 # Synchronize explicit toggles with the prompt parsed flags
 prompt_parsed["style"] = next(s for s in ArchitecturalStyle if s.value == wd["style"])
 gate_type_code_map = {"Double Swing Gate": "double_swing", "Sliding Gate": "sliding", "Modern Slat Gate": "modern_slat", "Wrought Iron Gate": "wrought_iron"}
@@ -601,12 +706,8 @@ current_inputs = {
 inputs_changed = current_inputs != st.session_state.get("last_inputs")
 
 needs_initial_load = "building_id" not in st.session_state or "building_model_cache" not in st.session_state
-should_generate = generate_clicked or needs_initial_load or st.session_state.get("force_generate", False)
+should_generate = generate_clicked or needs_initial_load or st.session_state.get("force_generate", False) or inputs_changed
 if "force_generate" in st.session_state: st.session_state.force_generate = False
-
-if inputs_changed and not should_generate and not needs_initial_load:
-    with wizard_tabs[3]:
-        st.info("Inputs changed! Click Generate to apply.")
 
 if should_generate:
     use_turbo = "Turbo" in st.session_state.get("engine_mode", "Turbo")
@@ -662,8 +763,8 @@ if should_generate:
 
 building_model = TypeAdapter(BuildingModel).validate_python(st.session_state.building_model_cache)
 
-# Top Key Metrics Summary
-total_built = sum(building_model.total_building_area(f) for f in range(1, plot_dims.num_floors + 1))
+# Top Key Metrics Summary — Ground Truth from building_model.plot
+total_built = sum(building_model.total_building_area(f) for f in range(1, building_model.plot.num_floors + 1))
 gate_w_str = f"{building_model.main_gates[0].width:.1f}m Gate" if building_model.main_gates else "No Gate"
 
 # Compute Timeline (unified with Climate Zone selector in Scheduling & Risk tab)
@@ -677,12 +778,11 @@ _CLIMATE_DELAY_MAP = {
 }
 _active_climate = st.session_state.get("climate_zone_risk", "Tropical / Monsoon (India, SE Asia)")
 _active_delay_pct = _CLIMATE_DELAY_MAP.get(_active_climate, (0.18, "High ⚠️", []))[0]
-base_days = 90 + (plot_dims.num_floors * 45)
+base_days = 90 + (building_model.plot.num_floors * 45)
 total_days = base_days + int(base_days * _active_delay_pct)
 
 # Compute Cost
 cost_usd = building_model.boq_estimate.cost_usd if building_model.boq_estimate else 0
-
 
 # Compute Compliance
 compliance_issues = sum(1 for a in building_model.annotations if a.category == 'compliance_tag' and a.style_props.get('color') == 'red')
@@ -759,9 +859,9 @@ if st.session_state.get("compare_target"):
 
 col_m1, col_m2, col_m3, col_m4, col_m5 = st.columns(5)
 with col_m1:
-    st.markdown(f'<div class="metric-card"><h4>📏 Footprint</h4><h2>{plot_length*plot_width:.0f} m²</h2><p style="color:#94A3B8; margin:0;">{plot_length:.1f}m x {plot_width:.1f}m</p></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="metric-card"><h4>📏 Footprint</h4><h2>{building_model.plot.length*building_model.plot.width:.0f} m²</h2><p style="color:#94A3B8; margin:0;">{building_model.plot.length:.1f}m x {building_model.plot.width:.1f}m</p></div>', unsafe_allow_html=True)
 with col_m2:
-    st.markdown(f'<div class="metric-card"><h4>🏢 Built Area</h4><h2>{total_built:.0f} m²</h2><p style="color:#94A3B8; margin:0;">Across {plot_dims.num_floors} levels</p></div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="metric-card"><h4>🏢 Built Area</h4><h2>{total_built:.0f} m²</h2><p style="color:#94A3B8; margin:0;">Across {building_model.plot.num_floors} levels</p></div>', unsafe_allow_html=True)
 with col_m3:
     st.markdown(f'<div class="metric-card"><h4>💰 Est. Cost</h4><h2>${cost_usd:,.0f}</h2><p style="color:#94A3B8; margin:0;">BOQ Estimate</p></div>', unsafe_allow_html=True)
 with col_m4:
@@ -794,12 +894,15 @@ with tab_2d:
 
     with col_info:
         st.subheader("Floor Selection")
+        max_floor = building_model.plot.num_floors
         selected_floor = st.radio(
             "Select Floor View",
-            options=list(range(1, plot_dims.num_floors + 1)),
+            options=list(range(1, max_floor + 1)),
             format_func=lambda f: f"Floor {f}",
             horizontal=True,
+            key="radio_sel_floor_view",
         )
+        selected_floor = min(int(selected_floor), max_floor)
 
         st.subheader("Floor Summary")
         floor_rooms = [r for r in building_model.rooms if r.floor == selected_floor]

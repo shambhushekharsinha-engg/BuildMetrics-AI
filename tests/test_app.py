@@ -156,3 +156,75 @@ def test_design_comparison():
     assert diff.summary_emoji != ""
     md = diff.to_markdown()
     assert "Cost" in md and "Timeline" in md
+
+
+def test_input_handler_prompt_caching():
+    """InputHandler.parse_prompt must cache results and return identical parsed output instantly."""
+    import time
+
+    from build_matrix.input_handler import InputHandler
+
+    prompt = "Modern 3-story villa with 30m width and 20m length"
+    # First call
+    res1 = InputHandler.parse_prompt(prompt)
+
+    # Second call must be from cache (< 1ms)
+    t2 = time.time()
+    res2 = InputHandler.parse_prompt(prompt)
+    t3 = time.time()
+
+    assert (t3 - t2) < 0.05
+    assert res1["num_floors"] == 3
+    assert res1["explicit_width"] == 30.0
+    assert res1["explicit_length"] == 20.0
+    assert res1 == res2
+
+
+def test_command_prompt_floor_and_dimension_parsing():
+    """Verify natural language commands extract floors and dimensions accurately."""
+    from build_matrix.input_handler import InputHandler
+
+    cases = [
+        ("Make it 3 floors with swimming pool", 3, None, None),
+        ("Modern 4-story luxury residence", 4, None, None),
+        ("Ground + 2 villa with garden", 3, None, None),
+        ("Make plot width 30m and add a pool", 1, 30.0, None),
+        ("Plot length 25m and width 20m", 1, 20.0, 25.0),
+        ("3 story villa 25x15m", 3, 15.0, 25.0),
+    ]
+    for text, expected_floors, expected_w, expected_l in cases:
+        parsed = InputHandler._parse_prompt_regex(text)
+        if expected_floors:
+            assert parsed.get("num_floors") == expected_floors, f"Failed floors on: {text}"
+        if expected_w:
+            assert parsed.get("explicit_width") == expected_w, f"Failed width on: {text}"
+        if expected_l:
+            assert parsed.get("explicit_length") == expected_l, f"Failed length on: {text}"
+
+
+def test_generate_building_direct_floor_synchronization():
+    """generate_building_direct must generate exact number of floors and dimensions passed in."""
+    from pydantic import TypeAdapter
+
+    from app import generate_building_direct
+    from build_matrix.models import BuildingModel
+
+    inputs = {
+        "prompt": "Modern 3-story residence with 30m width",
+        "plot_length": 25.0,
+        "plot_width": 30.0,
+        "max_height": 12.0,
+        "num_floors": 3,
+        "style": "Modern"
+    }
+    b_id, model_data = generate_building_direct(inputs)
+    assert b_id is not None
+    model = TypeAdapter(BuildingModel).validate_python(model_data)
+    assert model.plot.num_floors == 3
+    assert model.plot.width == 30.0
+    assert model.plot.length == 25.0
+    # Must have rooms across floor 1, 2, and 3
+    floors_with_rooms = {r.floor for r in model.rooms}
+    assert 1 in floors_with_rooms
+    assert 2 in floors_with_rooms
+    assert 3 in floors_with_rooms

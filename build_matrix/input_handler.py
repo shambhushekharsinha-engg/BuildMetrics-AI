@@ -57,11 +57,20 @@ class InputHandler:
         "Courtyard": ["courtyard", "atrium", "garden courtyard"],
     }
 
+    _PROMPT_CACHE: typing.ClassVar[dict[str, Any]] = {}
+
     @classmethod
     def parse_prompt(cls, prompt: str) -> dict[str, Any]:
-        """Extract architectural constraints using LLM, or fallback to regex."""
+        """Extract architectural constraints using LLM, or fallback to regex. Caches results for instantaneous retrieval."""
+        cleaned_prompt = prompt.strip() if prompt else ""
+        if not cleaned_prompt:
+            return cls._parse_prompt_regex("")
+        if cleaned_prompt in cls._PROMPT_CACHE:
+            import copy
+            return copy.deepcopy(cls._PROMPT_CACHE[cleaned_prompt])
+
         api_key = os.environ.get("GEMINI_API_KEY")
-        if api_key:
+        if api_key and not api_key.startswith("dummy") and api_key not in ("dummy_test_key", "test", ""):
             try:
                 import google.generativeai as genai
                 genai.configure(api_key=api_key)
@@ -85,7 +94,7 @@ You are an expert architectural prompt parser. Extract the following from the us
 }
 Return ONLY valid JSON.
 '''
-                response = model.generate_content(f"{system_prompt}\nUser Prompt: {prompt}")
+                response = model.generate_content(f"{system_prompt}\nUser Prompt: {cleaned_prompt}", request_options={"timeout": 3.0})
                 text = response.text.strip()
                 text = text.removeprefix("```json")
                 text = text.removesuffix("```")
@@ -100,13 +109,18 @@ Return ONLY valid JSON.
                         matched_style = s
                         break
                 data["style"] = matched_style
-                data["raw_prompt"] = prompt
+                data["raw_prompt"] = cleaned_prompt
                 
-                return data
+                cls._PROMPT_CACHE[cleaned_prompt] = data
+                import copy
+                return copy.deepcopy(data)
             except Exception as e:  # noqa: BLE001
                 print(f"LLM parsing failed, falling back to regex. Error: {e}")
         
-        return cls._parse_prompt_regex(prompt)
+        parsed = cls._parse_prompt_regex(cleaned_prompt)
+        cls._PROMPT_CACHE[cleaned_prompt] = parsed
+        import copy
+        return copy.deepcopy(parsed)
 
     @classmethod
     def _parse_prompt_regex(cls, prompt: str) -> dict[str, Any]:
@@ -132,12 +146,16 @@ Return ONLY valid JSON.
                 val_str = floor_match.group(1)
                 val = cls.WORD_TO_NUM.get(val_str, int(val_str) if val_str.isdigit() else 1)
                 num_floors = max(1, min(100, val))
+            else:
+                gp_match = re.search(r'(?:ground\s*\+\s*(\d+))|(?:g\s*\+\s*(\d+))', prompt_lower)
+                if gp_match:
+                    g_val = gp_match.group(1) or gp_match.group(2)
+                    num_floors = 1 + int(g_val)
 
         # 3. Unit Conversion Engine: Area parsing in sq ft / sq m
-
         explicit_len, explicit_wid = None, None
 
-        # Check for explicit length x width (e.g., "25x15m")
+        # Check for explicit length x width (e.g., "25x15m" or "25 by 15")
         dim_match = re.search(r'(\d+(?:\.\d+)?)\s*(?:x|by|\*)\s*(\d+(?:\.\d+)?)\s*(?:m|meters|ft|feet)?', prompt_lower)
         if dim_match:
             try:
@@ -145,6 +163,24 @@ Return ONLY valid JSON.
                 explicit_wid = float(dim_match.group(2))
             except ValueError:
                 pass
+
+        # Check for standalone width / length (e.g. "width 30m", "30m width", "length 25m", "25m length")
+        if not explicit_wid:
+            w_match = re.search(r'(?:(?:plot\s*)?width\s*(?:of\s*|=|:|\s)?\s*(\d+(?:\.\d+)?)\s*(?:m|meters)?)|(?:(\d+(?:\.\d+)?)\s*(?:m|meters)?\s*(?:plot\s*)?width)', prompt_lower)
+            if w_match:
+                try:
+                    val = w_match.group(1) or w_match.group(2)
+                    explicit_wid = float(val)
+                except (ValueError, TypeError):
+                    pass
+        if not explicit_len:
+            l_match = re.search(r'(?:(?:plot\s*)?length\s*(?:of\s*|=|:|\s)?\s*(\d+(?:\.\d+)?)\s*(?:m|meters)?)|(?:(\d+(?:\.\d+)?)\s*(?:m|meters)?\s*(?:plot\s*)?length)', prompt_lower)
+            if l_match:
+                try:
+                    val = l_match.group(1) or l_match.group(2)
+                    explicit_len = float(val)
+                except (ValueError, TypeError):
+                    pass
 
         # Check for area in sq ft / square feet (e.g., "1500 sq ft")
         if not explicit_len:
