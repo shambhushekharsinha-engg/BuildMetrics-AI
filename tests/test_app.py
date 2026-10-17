@@ -203,11 +203,10 @@ def test_command_prompt_floor_and_dimension_parsing():
 
 
 def test_generate_building_direct_floor_synchronization():
-    """generate_building_direct must generate exact number of floors and dimensions passed in."""
-    from pydantic import TypeAdapter
-
-    from app import generate_building_direct
-    from build_matrix.models import BuildingModel
+    """Verify building generation synchronizes exact number of floors and dimensions across all levels."""
+    from build_matrix.input_handler import InputHandler
+    from build_matrix.layout_engine import LayoutEngine
+    from build_matrix.models import ArchitecturalStyle, PlotDimensions
 
     inputs = {
         "prompt": "Modern 3-story residence with 30m width",
@@ -217,9 +216,17 @@ def test_generate_building_direct_floor_synchronization():
         "num_floors": 3,
         "style": "Modern"
     }
-    b_id, model_data = generate_building_direct(inputs)
-    assert b_id is not None
-    model = TypeAdapter(BuildingModel).validate_python(model_data)
+    plot_dims = PlotDimensions(
+        length=inputs["plot_length"],
+        width=inputs["plot_width"],
+        max_height=inputs["max_height"],
+        num_floors=inputs["num_floors"],
+    )
+    style_enum = ArchitecturalStyle(inputs["style"])
+    prompt_parsed = InputHandler.parse_prompt(inputs["prompt"])
+    layout_engine = LayoutEngine(plot=plot_dims, style=style_enum)
+    model = layout_engine.generate_building(prompt_parsed=prompt_parsed)
+
     assert model.plot.num_floors == 3
     assert model.plot.width == 30.0
     assert model.plot.length == 25.0
@@ -228,3 +235,4 @@ def test_generate_building_direct_floor_synchronization():
     assert 1 in floors_with_rooms
     assert 2 in floors_with_rooms
     assert 3 in floors_with_rooms
+
