@@ -324,6 +324,8 @@ class Blueprint3DRenderer:
             "windows": [{"id": w.id, "x": w.x, "y": w.y, "w": w.width, "orient": w.orientation, "floor": w.floor} for w in self.building.windows],
             "stairs": [{"id": s.id, "x": s.x, "y": s.y, "w": s.width, "l": s.length, "steps": s.num_steps, "dir": s.direction, "floor": s.floor} for s in self.building.stairs],
             "fixtures": [{"id": f.id, "type": f.fixture_type, "name": f.name, "x": f.x, "y": f.y, "w": f.width, "h": f.height, "floor": f.floor} for f in self.building.fixtures],
+            "pools": [{"x": r.x, "y": r.y, "w": r.width, "h": r.height, "floor": r.floor}
+                       for r in self.building.rooms if "pool" in r.room_type.lower() or "pool" in r.name.lower()],
             "style": self.building.style.value,
         }
 
@@ -1051,6 +1053,19 @@ class Blueprint3DRenderer:
                 buildingGroup.add(mesh);
             }});
             
+            // 0b. Floor Slabs (concrete between floors for visual depth)
+            const slabMat = new THREE.MeshStandardMaterial({{ color: 0xd4d0c8, roughness: 0.6 }});
+            for (let fl = 1; fl <= data.plot.floors; fl++) {{
+                const slabY = (fl - 1) * floorH;
+                const slab = new THREE.Mesh(
+                    new THREE.BoxGeometry(data.plot.length, 0.22, data.plot.width),
+                    slabMat
+                );
+                slab.position.set(data.plot.length / 2, slabY + 0.11, data.plot.width / 2);
+                slab.receiveShadow = true;
+                buildingGroup.add(slab);
+            }}
+
             // 1. Walls
             data.walls.forEach((w) => {{
                 const dx = w.x2 - w.x1;
@@ -1154,6 +1169,29 @@ class Blueprint3DRenderer:
                 }}
             }});
 
+
+            // 5b. Swimming Pools (teal water box with shimmer material)
+            if (data.pools) {{
+                data.pools.forEach(pool => {{
+                    const poolWater = new THREE.MeshPhysicalMaterial({{
+                        color: 0x00bfff, transmission: 0.85, opacity: 1,
+                        transparent: true, roughness: 0.05, ior: 1.33,
+                        metalness: 0.0, thickness: 0.5
+                    }});
+                    const poolEdge = new THREE.MeshStandardMaterial({{ color: 0xf5f5f5, roughness: 0.3 }});
+                    const floorY0 = (pool.floor - 1) * floorH;
+                    const shellGeom = new THREE.BoxGeometry(pool.w + 0.3, 0.2, pool.h + 0.3);
+                    const shell = new THREE.Mesh(shellGeom, poolEdge);
+                    shell.position.set(pool.x + pool.w / 2, floorY0 - 0.1, pool.y + pool.h / 2);
+                    buildingGroup.add(shell);
+                    const waterGeom = new THREE.BoxGeometry(pool.w, 1.2, pool.h);
+                    const water = new THREE.Mesh(waterGeom, poolWater);
+                    water.position.set(pool.x + pool.w / 2, floorY0 - 0.6, pool.y + pool.h / 2);
+                    water.userData = {{ type: "Swimming Pool", floor: pool.floor }};
+                    buildingGroup.add(water);
+                }});
+            }}
+
             // 6. Fixtures & Furniture
             data.fixtures.forEach(f => {{
                 const mesh = createFixtureMesh(f, currentMode, materials);
@@ -1163,12 +1201,68 @@ class Blueprint3DRenderer:
                 fixturesGroup.add(mesh);
             }});
 
-            // 7. Roof Slab
+            // 7. Roof Slab + Architectural Gable/Hip/Flat geometry per style
             const roofZ0 = data.plot.floors * floorH;
-            const roofGeom = new THREE.BoxGeometry(data.plot.length + 0.6, 0.4, data.plot.width + 0.6);
-            const roofMesh = new THREE.Mesh(roofGeom, materials.roof);
-            roofMesh.position.set(data.plot.length / 2, roofZ0 + 0.2, data.plot.width / 2);
-            roofGroup.add(roofMesh);
+            const roofSlab = new THREE.Mesh(
+                new THREE.BoxGeometry(data.plot.length + 0.6, 0.3, data.plot.width + 0.6),
+                materials.roof
+            );
+            roofSlab.position.set(data.plot.length / 2, roofZ0 + 0.15, data.plot.width / 2);
+            roofGroup.add(roofSlab);
+
+            // Style-aware pitched roof
+            const styleStr = (data.style || '').toLowerCase();
+            const hasPitched = styleStr.includes('classic') || styleStr.includes('craftsman') || styleStr.includes('scandinavian') || styleStr.includes('mediterranean') || styleStr.includes('japandi') || styleStr.includes('tropical') || styleStr.includes('luxury');
+            if (hasPitched) {{
+                const ridgeH = Math.min(data.plot.length, data.plot.width) * 0.22;
+                const pitchMat = new THREE.MeshStandardMaterial({{ color: 0x8d4e3c, roughness: 0.7, metalness: 0.0 }});
+                const roofW = data.plot.width + 1.0;
+                const roofL = data.plot.length + 1.0;
+                const midX = data.plot.length / 2;
+                const midZ = data.plot.width / 2;
+                const topY = roofZ0 + 0.3 + ridgeH;
+                const faces = [
+                    [[midX - roofL / 2, roofZ0 + 0.3, midZ + roofW / 2],
+                     [midX + roofL / 2, roofZ0 + 0.3, midZ + roofW / 2],
+                     [midX, topY, midZ]],
+                    [[midX + roofL / 2, roofZ0 + 0.3, midZ - roofW / 2],
+                     [midX - roofL / 2, roofZ0 + 0.3, midZ - roofW / 2],
+                     [midX, topY, midZ]],
+                    [[midX - roofL / 2, roofZ0 + 0.3, midZ + roofW / 2],
+                     [midX, topY, midZ],
+                     [midX - roofL / 2, roofZ0 + 0.3, midZ - roofW / 2]],
+                    [[midX + roofL / 2, roofZ0 + 0.3, midZ + roofW / 2],
+                     [midX + roofL / 2, roofZ0 + 0.3, midZ - roofW / 2],
+                     [midX, topY, midZ]],
+                ];
+                faces.forEach(verts => {{
+                    const geo = new THREE.BufferGeometry();
+                    const flat = new Float32Array(verts.flat());
+                    geo.setAttribute('position', new THREE.BufferAttribute(flat, 3));
+                    geo.computeVertexNormals();
+                    const mesh = new THREE.Mesh(geo, pitchMat);
+                    mesh.castShadow = true;
+                    roofGroup.add(mesh);
+                }});
+            }}
+
+            // Roof edge parapet / fascia trim
+            const parapetMat = new THREE.MeshStandardMaterial({{ color: 0xd4cfc9, roughness: 0.5 }});
+            const parapetH = hasPitched ? 0.0 : 0.35;
+            if (parapetH > 0) {{
+                const sides = [
+                    {{ x: data.plot.length / 2, z: -0.1, lx: data.plot.length + 0.6, lz: 0.18 }},
+                    {{ x: data.plot.length / 2, z: data.plot.width + 0.1, lx: data.plot.length + 0.6, lz: 0.18 }},
+                    {{ x: -0.1, z: data.plot.width / 2, lx: 0.18, lz: data.plot.width + 0.6 }},
+                    {{ x: data.plot.length + 0.1, z: data.plot.width / 2, lx: 0.18, lz: data.plot.width + 0.6 }},
+                ];
+                sides.forEach(s => {{
+                    const pg = new THREE.BoxGeometry(s.lx, parapetH, s.lz);
+                    const pm = new THREE.Mesh(pg, parapetMat);
+                    pm.position.set(s.x, roofZ0 + 0.3 + parapetH / 2, s.z);
+                    roofGroup.add(pm);
+                }});
+            }}
 
             // 8. Boundary Compound Wall (3D)
             if (data.boundary_walls) {{

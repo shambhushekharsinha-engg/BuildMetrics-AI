@@ -872,7 +872,7 @@ with col_m5:
 st.divider()
 
 # Main Interactive Workspace Tabs
-tab_2d, tab_3d, tab_schedule, tab_eng, tab_risk, tab_vastu, tab_eco, tab_export = st.tabs(
+tab_2d, tab_3d, tab_schedule, tab_eng, tab_risk, tab_vastu, tab_eco, tab_land, tab_export = st.tabs(
     [
         "📐 2D CAD Blueprint Studio",
         "🏗️ 3D Blueprint Visualizer",
@@ -881,6 +881,7 @@ tab_2d, tab_3d, tab_schedule, tab_eng, tab_risk, tab_vastu, tab_eco, tab_export 
         "🌦️ Scheduling & Risk Management",
         "🧭 Vastu & Spatial Harmony",
         "🌱 Eco & Sustainability",
+        "🌍 Land & Soil Quality",
         "📥 Export Center",
     ]
 )
@@ -1040,7 +1041,7 @@ with tab_3d:
                 html_3d_code = render_3d_direct_cached(b_cache_json)
 
     # Embed Three.js 3D Viewport HTML Component
-    components.html(html_3d_code, height=680, scrolling=False)
+    components.html(html_3d_code, height=760, scrolling=False)
 
 
 # ---------------------------------------------------------
@@ -1905,6 +1906,32 @@ with tab_export:
         if "zip_data" not in st.session_state:
             st.session_state.zip_data = None
 
+        # Multi-floor ZIP with all floor blueprints
+        if "export_multifloor_zip" not in st.session_state:
+            st.session_state.export_multifloor_zip = None
+        if st.button("📐 Generate All-Floors ZIP (PNG per floor)", key="btn_gen_multifloor"):
+            with st.spinner(f"Rendering all {building_model.plot.num_floors} floors..."):
+                import io as _io
+                import zipfile
+                from dataclasses import asdict as _asdict
+                zip_buf = _io.BytesIO()
+                cfg_j = json.dumps(_asdict(Blueprint2DConfig(theme="Classic Blueprint", dpi=200)), sort_keys=True)
+                b_j = json.dumps(st.session_state.building_model_cache, sort_keys=True)
+                with zipfile.ZipFile(zip_buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+                    for fl in range(1, building_model.plot.num_floors + 1):
+                        fl_png = render_2d_direct_cached(b_j, cfg_j, fl, format="png")
+                        zf.writestr(f"Floor_{fl}_Blueprint.png", fl_png)
+                zip_buf.seek(0)
+                st.session_state.export_multifloor_zip = zip_buf.getvalue()
+        if st.session_state.export_multifloor_zip:
+            st.download_button(
+                "⬇️ Download All Floors ZIP",
+                data=st.session_state.export_multifloor_zip,
+                file_name="BuildMetrics_All_Floors.zip",
+                mime="application/zip",
+                use_container_width=True,
+            )
+        st.divider()
         if st.button("Generate Complete Package", key="btn_gen_zip"):
             with st.spinner("Bundling ZIP Package (All 2D & 3D Formats)..."):
                 try:
@@ -1928,7 +1955,7 @@ with tab_export:
                 use_container_width=True,
             )
 
-    with col_e7:
+    with col_e8:
         st.markdown("#### 📋 Executive Spec Sheet")
         spec_md = _generate_spec_sheet_markdown(building_model)
         st.download_button(

@@ -178,31 +178,74 @@ class Blueprint2DRenderer:
         if self.config.show_garden and getattr(building, "gardens", None):
             self._draw_garden_area(ax, building, theme)
 
+        # Room-type -> fill color + short tag for all themes
+        _ROOM_FILLS = {
+            "living": ("#4A90D9", "LR"),
+            "master bedroom": ("#9B59B6", "MB"),
+            "bedroom": ("#8E44AD", "BR"),
+            "guest bedroom": ("#7D3C98", "GB"),
+            "kitchen": ("#E67E22", "KT"),
+            "dining": ("#CA6F1E", "DR"),
+            "bathroom": ("#1ABC9C", "BT"),
+            "toilet": ("#17A589", "WC"),
+            "balcony": ("#27AE60", "BAL"),
+            "terrace": ("#2ECC71", "TER"),
+            "study": ("#2980B9", "STU"),
+            "office": ("#2471A3", "OFF"),
+            "garage": ("#7F8C8D", "GAR"),
+            "utility": ("#95A5A6", "UTL"),
+            "storeroom": ("#808B96", "STR"),
+            "pool": ("#5DADE2", "POOL"),
+            "gym": ("#E74C3C", "GYM"),
+            "prayer": ("#F39C12", "PR"),
+            "foyer": ("#2C3E50", "FYR"),
+            "corridor": ("#AAB7B8", "COR"),
+        }
+
+        def _get_room_style(name, rtype):
+            key = (rtype or name).lower().strip()
+            for kw, val in _ROOM_FILLS.items():
+                if kw in key:
+                    return val
+            return ("#607D8B", "RM")
+
         # 3. Draw Rooms
         floor_rooms = [r for r in building.rooms if r.floor == floor]
         for room in floor_rooms:
+            fill_hex, room_tag = _get_room_style(room.name, room.room_type)
+            # Color-coded semi-transparent fill for every theme
             room_rect = patches.Rectangle(
                 (room.x, room.y),
                 room.width,
                 room.height,
-                facecolor=room.color if self.config.theme == "Paper White" else "none",
-                alpha=0.25 if self.config.theme == "Paper White" else 0.0,
-                edgecolor="none",
+                facecolor=fill_hex,
+                alpha=0.22,
+                edgecolor=fill_hex,
+                linewidth=0.7,
+                zorder=1,
             )
             ax.add_patch(room_rect)
 
-            # Room Label
+            # Room Labels: name on top, dims below
             if self.config.show_room_labels:
+                cx = room.x + room.width / 2
+                cy = room.y + room.height / 2
                 ax.text(
-                    room.x + room.width / 2,
-                    room.y + room.height / 2,
-                    f"{room.name}\n{room.width:.2f}m x {room.height:.2f}m\n({room.area:.1f} m²)",
+                    cx, cy + max(0.0, room.height * 0.12),
+                    f"[{room_tag}] {room.name}",
                     color=theme["text"],
-                    ha="center",
-                    va="center",
-                    fontsize=8,
-                    fontweight="bold",
-                    bbox={'boxstyle': "round,pad=0.3", 'facecolor': theme["bg"], 'edgecolor': theme["dim"], 'alpha': 0.75},
+                    ha="center", va="center",
+                    fontsize=7.5, fontweight="bold",
+                    bbox={"boxstyle": "round,pad=0.22", "facecolor": fill_hex,
+                          "edgecolor": "none", "alpha": 0.72},
+                    zorder=10,
+                )
+                ax.text(
+                    cx, cy - max(0.0, room.height * 0.16),
+                    f"{room.width:.1f}x{room.height:.1f}m ({room.area:.0f}m2)",
+                    color=theme["dim"],
+                    ha="center", va="center",
+                    fontsize=6.5,
                     zorder=10,
                 )
 
@@ -312,6 +355,9 @@ class Blueprint2DRenderer:
         if self.config.show_compass:
             self._draw_compass_rose(ax, plot.length + 2.0, plot.width + 1.5, theme)
 
+        # 12a. Draw Scale Bar (professional 1:100 scale indicator)
+        self._draw_scale_bar(ax, plot, theme)
+
         # 12b. Draw Compliance Annotations
         for ann in building.annotations:
             if ann.category == "compliance_tag":
@@ -343,6 +389,38 @@ class Blueprint2DRenderer:
 
         plt.tight_layout()
         return fig
+
+    def _draw_scale_bar(self, ax: plt.Axes, plot: Any, theme: dict) -> None:
+        """Draws a professional metric scale bar at bottom-left of blueprint."""
+        import math
+        # Choose a nice round number for scale bar length
+        plot_len = plot.length
+        raw_bar = plot_len * 0.25  # 25% of plot length
+        magnitude = 10 ** math.floor(math.log10(max(raw_bar, 0.1)))
+        bar_m = round(raw_bar / magnitude) * magnitude  # round to nearest magnitude
+        bar_m = max(1.0, bar_m)
+
+        bar_x0 = 0.2
+        bar_y0 = -2.2
+        ticks = 4
+        seg_m = bar_m / ticks
+
+        for i in range(ticks):
+            seg_x = bar_x0 + i * seg_m
+            c = theme["text"] if i % 2 == 0 else theme["bg"]
+            ec = theme["text"]
+            rect = patches.Rectangle((seg_x, bar_y0), seg_m, 0.18,
+                                      facecolor=c, edgecolor=ec, linewidth=0.6, zorder=22)
+            ax.add_patch(rect)
+            ax.text(seg_x, bar_y0 - 0.22, f"{int(i * seg_m)}m",
+                    color=theme["dim"], fontsize=5.5, ha="center", va="top", zorder=22)
+
+        # End label
+        ax.text(bar_x0 + bar_m, bar_y0 - 0.22, f"{int(bar_m)}m",
+                color=theme["dim"], fontsize=5.5, ha="center", va="top", zorder=22)
+        ax.text(bar_x0 + bar_m / 2, bar_y0 + 0.28, "SCALE 1:100",
+                color=theme["text"], fontsize=6, ha="center", va="bottom",
+                fontweight="bold", zorder=22)
 
     def _draw_axis_grid(self, ax: plt.Axes, building: BuildingModel, theme: dict[str, str]) -> None:
         """Draws architectural structural axis grid lines and callout bubbles."""
