@@ -320,10 +320,13 @@ class LayoutEngine:
                 typ_stairs = floor_stairs
                 typ_fixtures = floor_fixtures
 
-        # Generate Plot Boundary Walls, Main Compound Gate, and Garden & Lawn Areas
+        # Generate Plot Boundary Walls, Main Compound Gate, Garden & Lawn Areas, Pool
         building.boundary_walls = self._generate_boundary_walls()
         building.main_gates = self._generate_main_gates(prompt_info, building.doors)
         building.gardens = self._generate_gardens(prompt_info, building.rooms)
+        # Add swimming pool rooms if requested
+        if prompt_info.get("include_pool", False):
+            building.rooms.extend(self._generate_pool(prompt_info))
 
         # Generate Architectural Axis Grid
         building.axis_grids = self._generate_axis_grid(all_pillars)
@@ -416,6 +419,46 @@ class LayoutEngine:
 
         return gardens
 
+
+    def _generate_pool(self, prompt_info: dict) -> list:
+        """Generate a swimming pool RoomSpec placed at the rear of the plot on floor 1."""
+        from build_matrix.models import RoomSpec
+
+        pool_type = prompt_info.get("pool_type", "rectangular")
+        l, w = self.plot.length, self.plot.width
+        margin = self.plot.margin
+
+        # Pool dimensions by type
+        if pool_type == "lap":
+            pool_w, pool_h = min(4.0, l * 0.18), min(12.5, w * 0.55)
+        elif pool_type == "infinity":
+            pool_w, pool_h = min(6.0, l * 0.28), min(10.0, w * 0.45)
+        elif pool_type == "plunge":
+            pool_w, pool_h = min(3.5, l * 0.15), min(3.5, w * 0.18)
+        elif pool_type == "l_shaped":
+            pool_w, pool_h = min(6.0, l * 0.28), min(8.0, w * 0.40)
+        else:  # rectangular (default)
+            pool_w, pool_h = min(5.0, l * 0.25), min(8.0, w * 0.40)
+
+        # Position: rear-right corner inside plot boundary with 0.8m clearance
+        pool_x = round(l - margin - pool_w - 0.8, 2)
+        pool_y = round(w - margin - pool_h - 0.8, 2)
+
+        # Clamp within plot
+        pool_x = max(margin + 0.5, pool_x)
+        pool_y = max(margin + 0.5, pool_y)
+
+        pool_room = RoomSpec(
+            id="POOL1",
+            name=f"Swimming Pool ({pool_type.replace('_', ' ').title()})",
+            room_type="pool",
+            x=pool_x,
+            y=pool_y,
+            width=round(pool_w, 2),
+            height=round(pool_h, 2),
+            floor=1,
+        )
+        return [pool_room]
 
     def _layout_floor_rooms(self, room_requests: list[dict[str, Any]], floor: int) -> list[RoomSpec]:
         """Tries to generate layout using LLM, falls back to Neufert grid solver."""

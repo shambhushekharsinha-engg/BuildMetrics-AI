@@ -284,6 +284,21 @@ Return ONLY valid JSON.
         elif "wrap" in prompt_lower or "around" in prompt_lower:
             garden_type = "wrap_around"
 
+        # 7. Swimming Pool Detection
+        has_pool = any(kw in prompt_lower for kw in [
+            "swimming pool", "swim pool", "pool", "lap pool", "infinity pool",
+            "plunge pool", "pool area", "pool villa",
+        ])
+        pool_type = "rectangular"
+        if "infinity" in prompt_lower:
+            pool_type = "infinity"
+        elif "lap" in prompt_lower:
+            pool_type = "lap"
+        elif "plunge" in prompt_lower:
+            pool_type = "plunge"
+        elif "l-shape" in prompt_lower or "l shape" in prompt_lower:
+            pool_type = "l_shaped"
+
         return {
             "style": detected_style,
             "num_floors": num_floors,
@@ -296,6 +311,8 @@ Return ONLY valid JSON.
             "main_gate_type": gate_type,
             "include_garden": has_garden,
             "garden_type": garden_type,
+            "include_pool": has_pool,
+            "pool_type": pool_type,
             "raw_prompt": prompt,
         }
 
