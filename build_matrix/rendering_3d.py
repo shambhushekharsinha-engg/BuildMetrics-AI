@@ -889,7 +889,7 @@ class Blueprint3DRenderer:
                 blueprint_stair: new THREE.MeshStandardMaterial({{ color: 0x00796b, roughness: 0.4 }}),
                 blueprint_door: new THREE.MeshStandardMaterial({{ color: 0x8d6e63, roughness: 0.6, bumpMap: noiseTex, bumpScale: 0.02 }}),
                 blueprint_glass: new THREE.MeshPhysicalMaterial({{ color: 0x80deea, transmission: 0.9, opacity: 1, transparent: true, roughness: 0.1, ior: 1.5 }}),
-                shaded_ext_wall: new THREE.MeshStandardMaterial({{ color: 0xe0e0e0, roughness: 0.4, bumpMap: noiseTex, bumpScale: 0.08 }}),
+                shaded_ext_wall: new THREE.MeshStandardMaterial({{ color: 0xd4b896, roughness: 0.75, metalness: 0.0, bumpScale: 0.15 }}),
                 shaded_int_wall: new THREE.MeshStandardMaterial({{ color: 0xf5f5f5, roughness: 0.6, bumpMap: noiseTex, bumpScale: 0.04 }}),
                 fixture_mat: new THREE.MeshStandardMaterial({{ color: 0xb0bec5, roughness: 0.5, metalness: 0.3 }}),
                 wireframe: new THREE.MeshBasicMaterial({{ color: 0x58a6ff, wireframe: true }}),
@@ -1040,17 +1040,68 @@ class Blueprint3DRenderer:
 
 
             // 0. Rooms (Floor Plates for Raycasting)
+            // Room-type color palette (matches 2D blueprint fills)
+            const roomColorMap = {{
+                'living room': 0x90caf9, 'living': 0x90caf9,
+                'master bedroom': 0xce93d8, 'bedroom': 0xb39ddb,
+                'kitchen': 0xffcc80, 'dining': 0xffe082,
+                'bathroom': 0x80cbc4, 'toilet': 0x80cbc4,
+                'balcony': 0xa5d6a7, 'patio': 0xa5d6a7, 'terrace': 0xa5d6a7,
+                'home office': 0xef9a9a, 'study': 0xef9a9a,
+                'pool': 0x5dade2, 'swimming': 0x5dade2,
+                'garage': 0xbdbdbd, 'utility': 0xeeeeee,
+                'foyer': 0xffecb3, 'hallway': 0xf5f5f5,
+            }};
+            function getRoomColor(name) {{
+                const n = (name || '').toLowerCase();
+                for (const [key, col] of Object.entries(roomColorMap)) {{
+                    if (n.includes(key)) return col;
+                }}
+                return 0xffffff;
+            }}
             data.rooms.forEach((r) => {{
-                const geom = new THREE.BoxGeometry(r.w, Math.max(r.h, 0.1), 0.05);
-                const mat = new THREE.MeshBasicMaterial({{ color: 0x1f6feb, transparent: true, opacity: 0.1, depthWrite: false }});
+                const rColor = getRoomColor(r.name);
+                const isBalcony = r.name.toLowerCase().includes('balcony') || r.name.toLowerCase().includes('patio') || r.name.toLowerCase().includes('terrace');
+                // Floor fill slab
+                const geom = new THREE.BoxGeometry(r.w - 0.05, Math.max(r.h - 0.05, 0.1), 0.06);
+                const mat = new THREE.MeshStandardMaterial({{ color: rColor, transparent: true, opacity: isBalcony ? 0.5 : 0.35, roughness: 0.8 }});
                 const mesh = new THREE.Mesh(geom, mat);
                 const midX = r.x + r.w / 2;
                 const midZ = r.y + r.h / 2;
-                const midY = (r.floor - 1) * floorH + 0.025;
+                const midY = (r.floor - 1) * floorH + 0.03;
                 mesh.position.set(midX, midY, midZ);
                 mesh.rotation.x = -Math.PI / 2;
                 mesh.userData = {{ type: 'Room', name: r.name, floor: r.floor, area: r.area, est_cost: r.est_cost }};
                 buildingGroup.add(mesh);
+
+                // Balcony: add glass railing perimeter
+                if (isBalcony) {{
+                    const railH = 1.1;
+                    const railThick = 0.06;
+                    const railMat = new THREE.MeshPhysicalMaterial({{ color: 0xb2ebf2, transparent: true, opacity: 0.55, roughness: 0.05, metalness: 0.1, transmission: 0.7 }});
+                    const postMat = new THREE.MeshStandardMaterial({{ color: 0xe0e0e0, roughness: 0.3, metalness: 0.6 }});
+                    const floorZ0 = (r.floor - 1) * floorH;
+                    // 4 railing panels
+                    const panels = [
+                        {{ w: r.w, d: railThick, px: r.x + r.w/2, pz: r.y }},
+                        {{ w: r.w, d: railThick, px: r.x + r.w/2, pz: r.y + r.h }},
+                        {{ w: railThick, d: r.h, px: r.x, pz: r.y + r.h/2 }},
+                        {{ w: railThick, d: r.h, px: r.x + r.w, pz: r.y + r.h/2 }},
+                    ];
+                    panels.forEach(p => {{
+                        const panelGeom = new THREE.BoxGeometry(p.w, railH, p.d);
+                        const panel = new THREE.Mesh(panelGeom, railMat);
+                        panel.position.set(p.px, floorZ0 + railH / 2, p.pz);
+                        buildingGroup.add(panel);
+                    }});
+                    // Corner posts
+                    [[r.x, r.y], [r.x+r.w, r.y], [r.x, r.y+r.h], [r.x+r.w, r.y+r.h]].forEach(([px, pz]) => {{
+                        const postGeom = new THREE.CylinderGeometry(0.04, 0.04, railH + 0.1, 8);
+                        const post = new THREE.Mesh(postGeom, postMat);
+                        post.position.set(px, floorZ0 + railH / 2, pz);
+                        buildingGroup.add(post);
+                    }});
+                }}
             }});
             
             // 0b. Floor Slabs (concrete between floors for visual depth)

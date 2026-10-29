@@ -872,7 +872,7 @@ with col_m5:
 st.divider()
 
 # Main Interactive Workspace Tabs
-tab_2d, tab_3d, tab_schedule, tab_eng, tab_risk, tab_vastu, tab_eco, tab_land, tab_export = st.tabs(
+tab_2d, tab_3d, tab_schedule, tab_eng, tab_risk, tab_vastu, tab_eco, tab_land, tab_pinn, tab_eeg, tab_evac, tab_marl, tab_export = st.tabs(
     [
         "📐 2D CAD Blueprint Studio",
         "🏗️ 3D Blueprint Visualizer",
@@ -882,6 +882,10 @@ tab_2d, tab_3d, tab_schedule, tab_eng, tab_risk, tab_vastu, tab_eco, tab_land, t
         "🧭 Vastu & Spatial Harmony",
         "🌱 Eco & Sustainability",
         "🌍 Land & Soil Quality",
+        "🔬 PINN Structural AI",
+        "🧠 EEG Neuro-Architecture",
+        "🚪 Evacuation & Crowd Safety",
+        "🤖 MARL Agent Negotiation",
         "📥 Export Center",
     ]
 )
@@ -1966,6 +1970,308 @@ with tab_export:
             use_container_width=True,
         )
         st.caption("⚡ Instant in-memory exports powered by Turbo Direct Engine. Zero cloud worker lag.")
+
+
+# ---------------------------------------------------------
+# TAB 10: PINN Structural AI Analysis
+# ---------------------------------------------------------
+with tab_pinn:
+    st.subheader("🔬 PINN Structural Analysis — Physics-Informed AI")
+    st.caption("Von Mises stress, Euler-Bernoulli deflection & Factor of Safety per IS 456 / IBC 2024. Powered by Physics-Informed Neural Network closed-form solvers.")
+
+    from build_matrix.pinn_structural import PINNStructuralEngine
+    _pinn_eng = PINNStructuralEngine()
+    _pinn_summary = _pinn_eng.get_stress_summary(building_model)
+
+    # Summary metrics row
+    status_color = {"SAFE": "#22c55e", "MARGINAL": "#f59e0b", "CRITICAL": "#ef4444"}
+    sc = status_color.get(_pinn_summary.overall_status, "#94a3b8")
+    pc1, pc2, pc3, pc4, pc5 = st.columns(5)
+    with pc1:
+        st.metric("Total Members", _pinn_summary.total_members)
+    with pc2:
+        st.metric("✅ Safe", _pinn_summary.safe_count)
+    with pc3:
+        st.metric("⚠️ Marginal", _pinn_summary.marginal_count)
+    with pc4:
+        st.metric("🚨 Critical", _pinn_summary.critical_count)
+    with pc5:
+        st.metric("Min FoS", f"{_pinn_summary.min_fos:.2f}x")
+
+    st.markdown(f"**Overall Structural Status:** <span style='color:{sc}; font-size:1.3em; font-weight:bold;'>{_pinn_summary.overall_status}</span>", unsafe_allow_html=True)
+    st.progress(min(1.0, _pinn_summary.min_fos / 3.0), text=f"Min Factor of Safety: {_pinn_summary.min_fos:.2f}x (target ≥ 2.0)")
+
+    st.divider()
+    pinn_col1, pinn_col2 = st.columns(2)
+
+    with pinn_col1:
+        st.markdown("#### 🏗️ Beam Analysis (Euler-Bernoulli)")
+        beam_results = _pinn_eng.analyze_beams(building_model)
+        if beam_results:
+            import pandas as pd
+            beam_df = pd.DataFrame([{
+                "Member": r.member_id,
+                "Span (m)": r.length_m,
+                "Load (kN)": r.load_kn,
+                "Stress (MPa)": r.stress_mpa,
+                "Deflection (mm)": r.deflection_mm,
+                "FoS": r.fos,
+                "Status": r.status,
+                "Section": r.section,
+            } for r in beam_results])
+            st.dataframe(
+                beam_df.style.apply(
+                    lambda row: [
+                        "background-color: #16a34a22" if row.Status == "SAFE"
+                        else "background-color: #f59e0b22" if row.Status == "MARGINAL"
+                        else "background-color: #ef444422"
+                    ] * len(row),
+                    axis=1,
+                ),
+                use_container_width=True,
+            )
+            st.caption("Permissible deflection: L/250 per NBC 2016 §1604.3 | M30 Concrete, E=30,000 MPa")
+        else:
+            st.info("No beams detected. Generate a building with structural members to analyze.")
+
+    with pinn_col2:
+        st.markdown("#### 🧱 Column Analysis (Axial Buckling)")
+        col_results = _pinn_eng.analyze_columns(building_model)
+        if col_results:
+            import pandas as pd
+            col_df = pd.DataFrame([{
+                "Member": r.member_id,
+                "Height (m)": r.length_m,
+                "Axial Load (kN)": r.load_kn,
+                "Stress (MPa)": r.stress_mpa,
+                "Euler FoS": r.fos,
+                "Status": r.status,
+                "Section": r.section,
+            } for r in col_results])
+            st.dataframe(col_df, use_container_width=True)
+            st.caption("IS 456:2000 Column — KL/r slenderness check | fe500 TMT, fy=500 MPa")
+        else:
+            st.info("No columns detected. Generate with structural pillars enabled.")
+
+    st.divider()
+    st.markdown("#### 📐 Fourier Positional Encoding (Chapter 3.3)")
+    st.caption("Harmonic encoding maps 3D Cartesian coordinates to 39-dimensional spectral manifold — resolves spectral bias near column re-entrant corners.")
+    import numpy as np
+    sample_pts = np.array([[1.0, 2.0, 0.5], [5.0, 3.0, 3.2], [10.0, 8.0, 6.4]])
+    encoding = _pinn_eng.fourier_encoding(sample_pts)
+    st.write(f"Input shape: {sample_pts.shape} → Encoded shape: {encoding.shape} (F=6 octaves, 39-dim harmonic)")
+    st.info(f"Max stress: **{_pinn_summary.max_stress_mpa} MPa** | Max deflection: **{_pinn_summary.max_deflection_mm} mm** | Overall: **{_pinn_summary.overall_status}**")
+
+
+# ---------------------------------------------------------
+# TAB 11: EEG Neuro-Architecture
+# ---------------------------------------------------------
+with tab_eeg:
+    st.subheader("🧠 EEG Neuro-Architecture & Affective Computing")
+    st.caption("Alpha/Beta/Theta/Gamma brainwave spectral power per room mapped to Russell's Circumplex Valence-Arousal-Dominance space (Chapter 5).")
+
+    from build_matrix.eeg_affective import EEGAffectiveEngine
+    _eeg_eng = EEGAffectiveEngine()
+    _eeg_profiles = _eeg_eng.compute_room_profiles(building_model)
+    _eeg_summary = _eeg_eng.get_summary(_eeg_profiles)
+
+    if _eeg_profiles:
+        wellness_color = {"EXCELLENT": "#22c55e", "GOOD": "#84cc16", "FAIR": "#f59e0b", "POOR": "#ef4444"}
+        wc = wellness_color.get(_eeg_summary.overall_wellness, "#94a3b8")
+        eeg_c1, eeg_c2, eeg_c3, eeg_c4 = st.columns(4)
+        with eeg_c1:
+            st.metric("Avg Valence (V)", f"{_eeg_summary.avg_valence:+.2f}", help="Russell Circumplex: -1=unpleasant, +1=pleasant")
+        with eeg_c2:
+            st.metric("Avg Arousal (A)", f"{_eeg_summary.avg_arousal:+.2f}", help="-1=calm/sleepy, +1=alert/excited")
+        with eeg_c3:
+            st.metric("Avg Dominance (D)", f"{_eeg_summary.avg_dominance:+.2f}", help="-1=overwhelmed, +1=in control")
+        with eeg_c4:
+            st.metric("Biophilic Score", f"{_eeg_summary.biophilic_avg}/10", help="Composite biophilic design wellness score")
+
+        st.markdown(f"**Spatial Wellness Rating:** <span style='color:{wc}; font-size:1.3em; font-weight:bold;'>{_eeg_summary.overall_wellness}</span> | 🌿 Calmest: **{_eeg_summary.calmest_room}** | ⚡ Most Stimulating: **{_eeg_summary.most_stimulating_room}**", unsafe_allow_html=True)
+        st.divider()
+
+        st.markdown("#### 📊 Room-by-Room EEG Profile")
+        import pandas as pd
+        eeg_df = pd.DataFrame([{
+            "Room": p.room_name,
+            "Type": p.room_type,
+            "α Alpha": p.alpha_power,
+            "β Beta": p.beta_power,
+            "θ Theta": p.theta_power,
+            "γ Gamma": p.gamma_power,
+            "Valence": p.valence,
+            "Arousal": p.arousal,
+            "Dominance": p.dominance,
+            "Stress": p.stress_level,
+            "Biophilic": p.biophilic_score,
+        } for p in _eeg_profiles])
+        st.dataframe(eeg_df, use_container_width=True)
+
+        st.divider()
+        st.markdown("#### 🧬 EEG Band Power Bar Chart")
+        eeg_chart_data = {
+            "Room": [p.room_name[:20] for p in _eeg_profiles],
+            "Alpha (Calm)": [p.alpha_power for p in _eeg_profiles],
+            "Beta (Focus)": [p.beta_power for p in _eeg_profiles],
+            "Theta (Creative)": [p.theta_power for p in _eeg_profiles],
+            "Gamma (Awe)": [p.gamma_power for p in _eeg_profiles],
+        }
+        import pandas as pd
+        eeg_plot_df = pd.DataFrame(eeg_chart_data).set_index("Room")
+        st.bar_chart(eeg_plot_df, use_container_width=True)
+
+        st.divider()
+        st.markdown("#### 💡 Neuro-Architecture Recommendations")
+        for p in _eeg_profiles:
+            stress_icon = "🟢" if p.stress_level == "LOW" else "🟡" if p.stress_level == "MEDIUM" else "🔴"
+            with st.expander(f"{stress_icon} {p.room_name} — Stress: {p.stress_level} | Biophilic: {p.biophilic_score}/10"):
+                st.write(p.recommendation)
+                st.caption(f"α={p.alpha_power:.2f} | β={p.beta_power:.2f} | θ={p.theta_power:.2f} | γ={p.gamma_power:.2f} | VAD: ({p.valence:+.2f}, {p.arousal:+.2f}, {p.dominance:+.2f})")
+    else:
+        st.info("Generate a building to compute EEG neuro-architecture profiles.")
+
+
+# ---------------------------------------------------------
+# TAB 12: Evacuation & Crowd Safety
+# ---------------------------------------------------------
+with tab_evac:
+    st.subheader("🚪 Evacuation Routing & Weidmann Crowd Dynamics")
+    st.caption("Microscopic multi-agent pedestrian egress simulation using Weidmann speed-density relation. NFPA 101 §7.6 + ADA §404.2.3 compliance verification (Chapter 15).")
+
+    from build_matrix.evacuation_pathfinding import EvacuationEngine
+    _evac_eng = EvacuationEngine()
+    _evac_result = _evac_eng.simulate(building_model)
+
+    # Top metrics
+    ev_c1, ev_c2, ev_c3, ev_c4, ev_c5 = st.columns(5)
+    with ev_c1:
+        st.metric("Total Occupants", _evac_result.total_occupants)
+    with ev_c2:
+        st.metric("Evac. Time", f"{_evac_result.evacuation_time_s:.0f}s")
+    with ev_c3:
+        st.metric("Max Density", f"{_evac_result.max_density:.1f} p/m²")
+    with ev_c4:
+        st.metric("Exit Count", _evac_result.num_exits)
+    with ev_c5:
+        nfpa_status = "✅ PASS" if _evac_result.nfpa_compliant else "❌ FAIL"
+        st.metric("NFPA 101", nfpa_status)
+
+    st.divider()
+    evac_col1, evac_col2 = st.columns([3, 2])
+
+    with evac_col1:
+        st.markdown("#### 🔥 8×8 Egress Density Heatmap")
+        import numpy as np
+        import pandas as pd
+        heatmap_data = np.array(_evac_result.egress_heatmap)
+        heatmap_df = pd.DataFrame(
+            heatmap_data,
+            index=[f"Row {i+1}" for i in range(8)],
+            columns=[f"Col {j+1}" for j in range(8)],
+        )
+        st.dataframe(
+            heatmap_df.style.background_gradient(cmap="YlOrRd", vmin=0, vmax=5.4),
+            use_container_width=True,
+        )
+        st.caption(f"Peak density = {_evac_result.max_density:.2f} p/m² | Weidmann k_max = 5.4 p/m² | Flow rate: {_evac_result.flow_rate_ppm:.0f} persons/min")
+
+    with evac_col2:
+        st.markdown("#### 📈 Weidmann Speed-Density Curve")
+        weid_df = pd.DataFrame({
+            "Density (p/m²)": _evac_result.weidmann_densities[::5],
+            "Walking Speed (m/s)": _evac_result.weidmann_speeds[::5],
+        })
+        st.line_chart(weid_df.set_index("Density (p/m²)"), use_container_width=True)
+        st.caption("v(k) = 1.35 · (1 − exp(−0.266 · (1/k − 1/5.4))) | Weidmann 1993")
+
+    st.divider()
+    st.markdown("#### 📋 NFPA 101 & ADA Compliance Audit")
+    for note in _evac_result.nfpa_notes:
+        if note.startswith("PASS"):
+            st.success(note)
+        elif note.startswith("FAIL"):
+            st.error(note)
+        else:
+            st.warning(note)
+
+    if _evac_result.bottleneck_locations:
+        st.markdown("#### 🚧 Congestion Bottleneck Locations")
+        for bl in _evac_result.bottleneck_locations:
+            st.warning(f"🚧 Bottleneck: {bl} — density > 3.5 p/m²")
+    else:
+        st.success("✅ No severe congestion bottlenecks detected (density ≤ 3.5 p/m² everywhere)")
+
+    st.info(f"Max travel distance: **{_evac_result.max_travel_distance_m}m** (NFPA limit: 61m unsprinklered) | Estimated full evacuation: **{_evac_result.evacuation_time_s:.0f} seconds**")
+
+
+
+# ---------------------------------------------------------
+# TAB 13: MARL Architectural Agent Negotiation
+# ---------------------------------------------------------
+with tab_marl:
+    st.subheader("🤖 MARL Architectural Agent Negotiation — Dec-POMDP / QMIX")
+    st.caption("4 specialized autonomous agents negotiate architectural design using QMIX value factorization. Convergence to Pareto-optimal Nash equilibrium (Chapter 4).")
+
+    from build_matrix.marl_architectural import MARLArchitecturalEngine
+    _marl_eng = MARLArchitecturalEngine()
+    _marl_epochs = st.slider("Negotiation Epochs", 10, 50, 20, 5, key="marl_epochs_slider")
+    _marl_sol = _marl_eng.simulate(building_model, epochs=_marl_epochs)
+
+    # Top metrics
+    mc1, mc2, mc3, mc4 = st.columns(4)
+    with mc1:
+        st.metric("Layout Score", f"{_marl_sol.layout_score:.1f}/100")
+    with mc2:
+        st.metric("Q_tot Reward", f"{_marl_sol.total_reward:.1f}")
+    with mc3:
+        equilibrium_str = "✅ Reached" if _marl_sol.equilibrium_reached else "⚠️ Partial"
+        st.metric("Equilibrium", equilibrium_str)
+    with mc4:
+        pareto_str = "✅ Pareto-Optimal" if _marl_sol.pareto_optimal else "🔄 Negotiating"
+        st.metric("Solution", pareto_str)
+
+    st.divider()
+    marl_col1, marl_col2 = st.columns([2, 3])
+
+    with marl_col1:
+        st.markdown("#### 🎯 Agent Score & Reward Breakdown")
+        import pandas as pd
+        agent_df = pd.DataFrame([{
+            "Agent": a.agent_name,
+            "Weight": f"{a.weight:.0%}",
+            "Score": f"{a.score:.3f}",
+            "Reward": a.reward,
+            "Top Action": a.top_action[:60] + "..." if len(a.top_action) > 60 else a.top_action,
+        } for a in _marl_sol.agents])
+        st.dataframe(agent_df, use_container_width=True)
+
+        for agent in _marl_sol.agents:
+            score_pct = agent.score
+            color = "#22c55e" if score_pct > 0.65 else "#f59e0b" if score_pct > 0.45 else "#ef4444"
+            st.markdown(
+                f"<div style='margin:4px 0;'><b>{agent.agent_name}</b> "
+                f"<div style='background:#1e293b;border-radius:4px;height:12px;'>"
+                f"<div style='background:{color};height:12px;border-radius:4px;width:{score_pct*100:.0f}%;'></div></div>"
+                f"<small>{score_pct:.3f}</small></div>",
+                unsafe_allow_html=True,
+            )
+
+    with marl_col2:
+        st.markdown("#### 📈 Q_tot Convergence Trajectory")
+        q_hist = _marl_sol.q_tot_history
+        q_df = pd.DataFrame({"Epoch": list(range(1, len(q_hist)+1)), "Q_tot Reward": q_hist}).set_index("Epoch")
+        st.line_chart(q_df, use_container_width=True)
+        st.caption(f"QMIX monotonicity: dQ_tot/dQ_i ≥ 0 ∀i | Convergence at epoch {_marl_sol.convergence_epoch+1} | δ < 0.02")
+
+    st.divider()
+    st.markdown("#### 📝 Agent Action Recommendations")
+    for agent in _marl_sol.agents:
+        icon = {"Architect Agent": "🏛️", "Structural Engineer": "🔩", "MEP & HVAC Agent": "⚙️", "Eco-Sustainability": "🌿"}.get(agent.agent_name, "🤖")
+        st.info(f"{icon} **{agent.agent_name}** (w={agent.weight:.0%}): {agent.top_action}")
+
+    st.info(f"Dec-POMDP negotiated over {_marl_epochs} epochs | Final Q_tot = **{_marl_sol.total_reward:.1f}** | Layout architectural score: **{_marl_sol.layout_score:.1f}/100**")
+
 
 # --- LEGAL DISCLAIMER ---
 st.markdown("---")

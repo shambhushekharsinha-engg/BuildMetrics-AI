@@ -2,7 +2,13 @@
 Shared pytest fixtures for BuildMetrics AI test suite.
 Provides environment setup, shared API client, and sample building fixtures.
 """
+import os
+import tempfile
+
 import pytest
+
+os.environ.setdefault("MPLCONFIGDIR", os.path.join(tempfile.gettempdir(), "matplotlib"))
+os.environ.setdefault("ENVIRONMENT", "test")
 
 
 @pytest.fixture(autouse=True)
@@ -11,7 +17,7 @@ def set_test_env(monkeypatch):
     monkeypatch.setenv("DATABASE_URL", "sqlite:///test_buildmetrics.db")
     monkeypatch.setenv("GEMINI_API_KEY", "dummy_test_key")
     monkeypatch.setenv("ENVIRONMENT", "test")
-    monkeypatch.setenv("REDIS_URL", "redis://localhost:6379")  # graceful fallback in model store
+    monkeypatch.setenv("REDIS_URL", "")  # empty = instant in-memory fallback without socket error
 
 
 @pytest.fixture(scope="session")

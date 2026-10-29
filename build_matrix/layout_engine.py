@@ -470,7 +470,7 @@ class LayoutEngine:
             genai = None
 
         api_key = os.environ.get("GEMINI_API_KEY")
-        if genai and api_key and room_requests:
+        if genai and api_key and room_requests and not api_key.startswith("dummy") and os.environ.get("ENVIRONMENT") != "test":
             try:
                 genai.configure(api_key=api_key)
                 model = genai.GenerativeModel("gemini-2.5-flash")

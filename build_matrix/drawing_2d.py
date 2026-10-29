@@ -248,6 +248,8 @@ class Blueprint2DRenderer:
                     fontsize=6.5,
                     zorder=10,
                 )
+            # 3b. ISO Furniture Symbols
+            self._draw_room_furniture(ax, room, theme)
 
         # 4. Draw Walls (With Hatching & Cutouts)
         floor_walls = [w for w in building.walls if w.floor == floor]
@@ -256,7 +258,7 @@ class Blueprint2DRenderer:
             color = theme["wall_ext"] if wall.is_exterior else theme["wall_int"]
             ax.plot([wall.x1, wall.x2], [wall.y1, wall.y2], color=color, linewidth=lw, solid_capstyle="butt", zorder=3)
             # Exterior Wall Hatching
-            if wall.is_exterior and self.config.show_hatches and self.config.theme == "Paper White":
+            if wall.is_exterior and self.config.show_hatches:
                 dx = wall.x2 - wall.x1
                 dy = wall.y2 - wall.y1
                 w_len = math.hypot(dx, dy)
@@ -269,7 +271,8 @@ class Blueprint2DRenderer:
                         wall.thickness,
                         angle=ang,
                         rotation_point='center',
-                        facecolor="none",
+                        facecolor=theme["hatch"],
+                        alpha=0.15,
                         edgecolor=theme["hatch"],
                         hatch="///",
                         linewidth=0.5,
@@ -350,6 +353,8 @@ class Blueprint2DRenderer:
         if self.config.show_dimensions:
             self._draw_dimension_line(ax, 0, plot.width + 1.2, plot.length, plot.width + 1.2, f"{plot.length:.2f} m", theme)
             self._draw_dimension_line(ax, plot.length + 1.2, 0, plot.length + 1.2, plot.width, f"{plot.width:.2f} m", theme, vertical=True)
+            # 11b. Multi-tier bay dimension chain (Row 2)
+            self._draw_bay_dimension_chains(ax, building, floor, plot, theme)
 
         # 12. Draw Compass Rose (North Arrow)
         if self.config.show_compass:
@@ -593,6 +598,9 @@ class Blueprint2DRenderer:
             ax.plot([dx, dx + dw * swing], [dy - dw / 2, dy - dw / 2], color=theme["door"], linewidth=1.5, zorder=7)
             arc = patches.Arc((dx, dy - dw / 2), width=2 * dw, height=2 * dw, angle=0, theta1=0, theta2=90, color=theme["door"], linestyle=":", linewidth=0.5, zorder=7)
             ax.add_patch(arc)
+            # ISO swing arc overlay (dashed, lw=0.5)
+            swing_arc = patches.Arc((dx, dy - dw / 2), width=2 * dw, height=2 * dw, angle=0, theta1=0, theta2=90, color=theme["door"], linestyle="dashed", linewidth=0.5, zorder=7)
+            ax.add_patch(swing_arc)
 
     def _draw_window(self, ax: plt.Axes, win: Any, theme: dict[str, str]) -> None:
         """Renders architectural windows with wall cutout gaps, double glass lines, and jambs."""
@@ -607,12 +615,16 @@ class Blueprint2DRenderer:
             # Window Frame Jambs at ends
             ax.plot([wx - ww / 2, wx - ww / 2], [wy - 0.12, wy + 0.12], color=theme["window"], linewidth=1.5, zorder=7)
             ax.plot([wx + ww / 2, wx + ww / 2], [wy - 0.12, wy + 0.12], color=theme["window"], linewidth=1.5, zorder=7)
+            # ISO Mullion centre-line (horizontal)
+            ax.plot([wx - ww / 2, wx + ww / 2], [wy, wy], color=theme["window"], linewidth=0.6, linestyle="--", alpha=0.5, zorder=7)
         else:
             ax.plot([wx, wx], [wy - ww / 2, wy + ww / 2], color=theme["bg"], linewidth=5.0, zorder=6)
             ax.plot([wx - 0.08, wx - 0.08], [wy - ww / 2, wy + ww / 2], color=theme["window"], linewidth=1.5, zorder=7)
             ax.plot([wx + 0.08, wx + 0.08], [wy - ww / 2, wy + ww / 2], color=theme["window"], linewidth=1.5, zorder=7)
             ax.plot([wx - 0.12, wx + 0.12], [wy - ww / 2, wy - ww / 2], color=theme["window"], linewidth=1.5, zorder=7)
             ax.plot([wx - 0.12, wx + 0.12], [wy + ww / 2, wy + ww / 2], color=theme["window"], linewidth=1.5, zorder=7)
+            # ISO Mullion centre-line (vertical)
+            ax.plot([wx, wx], [wy - ww / 2, wy + ww / 2], color=theme["window"], linewidth=0.6, linestyle="--", alpha=0.5, zorder=7)
 
     def _draw_dimension_line(
 
@@ -684,11 +696,16 @@ class Blueprint2DRenderer:
         ax.text(bx + block_w*0.35, by + 0.3, f"BUILT AREA: {meta['TOTAL_BUILT_AREA']}", color=theme["dim"], fontsize=6, zorder=22)
 
         # Content Right: Meta
-        import datetime
-        date_str = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%d")
-        ax.text(bx + block_w*0.75, by + 1.4, f"SCALE: {meta['SCALE']} @ A3", color=theme["text"], fontsize=7, fontweight="bold", zorder=22)
-        ax.text(bx + block_w*0.75, by + 0.8, "DRAWN BY: Buildmetrics Engine", color=theme["dim"], fontsize=6, zorder=22)
-        ax.text(bx + block_w*0.75, by + 0.3, f"DATE: {date_str}  REV: 01", color=theme["dim"], fontsize=6, zorder=22)
+        # Enhanced ISO title block fields
+        ax.text(bx + block_w*0.75, by + 1.6, f"SCALE: {meta['SCALE']} @ A3", color=theme["text"], fontsize=7, fontweight="bold", zorder=22)
+        ax.text(bx + block_w*0.75, by + 1.15, "DWG NO: A-101", color=theme["dim"], fontsize=6, zorder=22)
+        ax.text(bx + block_w*0.75, by + 0.8, "SCALE: 1:100", color=theme["dim"], fontsize=6, zorder=22)
+        ax.text(bx + block_w*0.75, by + 0.5, "DATE: Oct 2026", color=theme["dim"], fontsize=6, zorder=22)
+        ax.text(bx + block_w*0.75, by + 0.2, "REVISION: Rev 01", color=theme["dim"], fontsize=6, zorder=22)
+        ax.plot([bx + block_w*0.7, bx + block_w], [by + 1.0, by + 1.0], color=theme["dim"], lw=0.4, zorder=21)
+        ax.text(bx + 0.18, by + 1.82, "BUILD-MATRIX.ai", color=theme["door"], fontsize=7.5, fontweight="black", fontstyle="italic", zorder=22)
+        proj_name = getattr(building.plot, "name", None) or "BUILD-MATRIX.ai Project"
+        ax.text(bx + 0.18, by + 0.05, f"PROJECT: {proj_name}", color=theme["dim"], fontsize=5.5, zorder=22)
 
     def _draw_boundary_walls(self, ax: plt.Axes, building: BuildingModel, theme: dict[str, str]) -> None:
         """Draws boundary compound wall around the plot perimeter."""
@@ -800,6 +817,95 @@ class Blueprint2DRenderer:
             va="center",
             zorder=10,
         )
+
+
+    # -----------------------------------------------------------------------
+    # ISO CAD: Multi-tier bay dimension chains
+    # -----------------------------------------------------------------------
+    def _draw_bay_dimension_chains(self, ax, building, floor, plot, theme):
+        """Second row of per-room bay dimensions offset 1.5 m beyond the overall dim line."""
+        floor_rooms = [r for r in building.rooms if r.floor == floor]
+        if not floor_rooms:
+            return
+        y_offset = plot.width + 2.7
+        x_offset = plot.length + 2.7
+        x_edges = sorted({v for r in floor_rooms for v in (r.x, r.x + r.width)})
+        for i in range(len(x_edges) - 1):
+            x1, x2 = x_edges[i], x_edges[i + 1]
+            if x2 - x1 > 0.3:
+                self._draw_dimension_line(ax, x1, y_offset, x2, y_offset,
+                                          f"{x2 - x1:.1f}m", theme)
+        y_edges = sorted({v for r in floor_rooms for v in (r.y, r.y + r.height)})
+        for i in range(len(y_edges) - 1):
+            y1, y2 = y_edges[i], y_edges[i + 1]
+            if y2 - y1 > 0.3:
+                self._draw_dimension_line(ax, x_offset, y1, x_offset, y2,
+                                          f"{y2 - y1:.1f}m", theme, vertical=True)
+
+    # -----------------------------------------------------------------------
+    # ISO CAD: Room furniture symbols
+    # -----------------------------------------------------------------------
+    def _draw_room_furniture(self, ax, room, theme):
+        """ISO schematic furniture outlines (lw=0.5, 40 % alpha, no fill)."""
+        import matplotlib.colors as mcolors
+        rtype = (room.room_type or room.name or "").lower()
+        cx = room.x + room.width / 2
+        cy = room.y + room.height / 2
+        rgba = list(mcolors.to_rgba(theme["text"]))
+        rgba[3] = 0.40
+        col = tuple(rgba)
+        lw = 0.5
+
+        if "living" in rtype:
+            sw = min(1.8, room.width * 0.6)
+            sh = min(0.8, room.height * 0.25)
+            sx = cx - sw / 2
+            sy = room.y + room.height * 0.18
+            ax.add_patch(patches.Rectangle(
+                (sx, sy), sw, sh,
+                facecolor="none", edgecolor=col, linewidth=lw, zorder=3))
+            ax.plot([sx, sx + sw], [sy + sh * 0.75, sy + sh * 0.75],
+                    color=col, linewidth=lw, zorder=3)
+
+        elif "bedroom" in rtype or "master" in rtype:
+            bw = min(1.5, room.width * 0.55)
+            bh = min(2.0, room.height * 0.55)
+            bx_l = cx - bw / 2
+            by_b = cy + room.height * 0.05
+            ax.add_patch(patches.Rectangle(
+                (bx_l, by_b), bw, bh,
+                facecolor="none", edgecolor=col, linewidth=lw, zorder=3))
+            ax.add_patch(patches.Arc(
+                (cx, by_b + bh * 0.85), width=bw * 0.55, height=bh * 0.22,
+                angle=0, theta1=0, theta2=180,
+                color=col, linewidth=lw, zorder=3))
+            ax.plot([bx_l, bx_l + bw], [by_b + bh * 0.65, by_b + bh * 0.65],
+                    color=col, linewidth=lw, linestyle="--", zorder=3)
+
+        elif "kitchen" in rtype:
+            cw = min(0.6, room.width * 0.18)
+            ax.add_patch(patches.Rectangle(
+                (room.x, room.y), room.width * 0.8, cw,
+                facecolor="none", edgecolor=col, linewidth=lw, zorder=3))
+            ax.add_patch(patches.Rectangle(
+                (room.x, room.y), cw, room.height * 0.6,
+                facecolor="none", edgecolor=col, linewidth=lw, zorder=3))
+
+        elif "bathroom" in rtype or "toilet" in rtype or "bath" in rtype:
+            tr = 0.20
+            tx = room.x + room.width * 0.25
+            ty = room.y + room.height * 0.25
+            ax.add_patch(patches.Circle(
+                (tx, ty), radius=tr,
+                facecolor="none", edgecolor=col, linewidth=lw, zorder=3))
+            tw = min(0.7, room.width * 0.45)
+            th = min(1.2, room.height * 0.5)
+            ax.add_patch(patches.Rectangle(
+                (cx - tw / 2, cy - th / 2), tw, th,
+                facecolor="none", edgecolor=col, linewidth=lw, zorder=3))
+            ax.add_patch(patches.Ellipse(
+                (cx, cy), tw * 0.6, th * 0.55,
+                facecolor="none", edgecolor=col, linewidth=lw * 0.8, zorder=3))
 
     def to_opencv_image(self, fig: plt.Figure) -> np.ndarray:
         """Converts Matplotlib Figure into an OpenCV BGR numpy array."""

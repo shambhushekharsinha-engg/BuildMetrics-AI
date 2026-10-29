@@ -1,5 +1,6 @@
 """
-BUILD-MATRIX.ai - AI-Powered Architectural 2D & 3D Blueprint Generator
+BUILD-MATRIX.ai — Enterprise Autonomous Civil & Architectural AI System
+Version 2.0 — Production Architecture Edition
 """
 
-__version__ = "1.0.0"
+__version__ = "2.0.0"
