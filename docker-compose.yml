@@ -82,12 +82,15 @@ services:
       - ENVIRONMENT=production
     ports:
       - "8501:8501"
+      - "80:8501"
     command:
       - streamlit
       - run
       - app.py
       - --server.port=8501
       - --server.address=0.0.0.0
+      - --server.enableCORS=false
+      - --server.enableXsrfProtection=false
     depends_on:
       api:
         condition: service_healthy
