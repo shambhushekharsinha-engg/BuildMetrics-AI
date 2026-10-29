@@ -1,10 +1,11 @@
 <div align="center">
 
 # 🏗️ BuildMetrics AI
-### Autonomous AI-Powered Architectural CAD, Structural Engineering & OpenBIM Studio
+### Autonomous AI-Powered Architectural CAD, Structural Engineering & OpenBIM Studio (v2.0.0)
 
 [![Python 3.12](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)](https://www.python.org)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.35.0-FF4B4B?logo=streamlit&logoColor=white)](https://streamlit.io)
+[![Version](https://img.shields.io/badge/Version-2.0.0-blue.svg)](https://github.com/shambhushekharsinha-engg/BuildMetrics-AI)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.111.0-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![Three.js](https://img.shields.io/badge/Three.js-r128-000000?logo=three.js&logoColor=white)](https://threejs.org)
 [![AutoCAD DXF](https://img.shields.io/badge/AutoCAD-DXF_R12-E51937?logo=autodesk&logoColor=white)](https://www.autodesk.com)
@@ -31,8 +32,12 @@ BuildMetrics AI integrates architectural layout synthesis, civil structural mech
 | Domain | Capabilities |
 | :--- | :--- |
 | **🤖 Autonomous AI Design** | Natural language prompt synthesis (Gemini 2.5 Flash), conversational architectural redesign, real-time diff tracking, and prompt undo/revision history (last 5 designs). |
-| **📐 2D CAD Blueprint Studio** | CAD-grade vector floor plan rendering across 6 themes (*Classic Blueprint*, *Architectural Dark*, *Paper White*, *Japandi Earth*, *Scandinavian Light*, *Tropical Emerald*). Includes dimension strings, beam/column structural grids, door swing arcs, plumbing fixtures, scale rulers, and title blocks. |
-| **🏗️ 3D WebGL Visualizer** | High-performance Three.js viewer with a floating Quick-Action Bar (`🔄 Orbit`, `📐 2D Top`, `🏢 Front Elevation`, `🚶 First-Person Walkthrough`, `🏠 Roof Toggle`, `☀️ Day/Night Sun Cycle`, `📸 HD Snapshot`). |
+| **🔬 PINN Structural AI** | Physics-Informed Neural Network engine modeling continuous Euler-Bernoulli deflection, Von Mises yield stress, Fourier positional encodings ($L=6$), and Factor of Safety ($FS$) classification. |
+| **🧠 EEG Neuro-Architecture** | Affective cognitive design computing per-room EEG spectral band powers ($\alpha, \beta, \theta, \gamma$), 3D Valence-Arousal-Dominance (VAD) emotional states, and biophilic architectural remedies. |
+| **🤖 MARL Agent Negotiation** | Multi-Agent Reinforcement Learning with QMIX monotonic value factorisation balancing 4 competing roles: *Architect*, *Structural Engineer*, *MEP Specialist*, and *Eco-Auditor*. |
+| **🚪 Evacuation & Crowd Safety** | Continuous Weidmann crowd flow dynamics ($v(k) = v_0[1 - e^{-\gamma(1/k - 1/k_{jam})}]$), 8×8 density heatmaps, and NFPA 101 Life Safety Code travel distance audits. |
+| **📐 2D CAD Blueprint Studio** | CAD-grade ISO 128 vector floor plans across 6 themes with wall diagonal hatching, door swing clearance arcs, window mullion centerlines, multi-tier bay dimension chains, title block metadata, and furniture symbols. |
+| **🏗️ 3D WebGL Visualizer** | High-performance Three.js viewer with color-coded floor fills, physical glass balcony railings, pitched roof trusses, swimming pool rendering, and a floating Quick-Action Bar (`🔄 Orbit`, `📐 2D Top`, `🏢 Front Elevation`, `🚶 Walkthrough`, `🏠 Roof Toggle`, `☀️ Day/Night Cycle`, `📸 HD Snapshot`). |
 | **🏢 OpenBIM & CAD Interoperability** | **Native AutoCAD DXF (`.dxf`)** ASCII export and **Industry-Standard OpenBIM IFC4 (`.ifc`)** generation compatible with Autodesk Revit, ArchiCAD, Solibri, FreeCAD, and Blender. |
 | **🧱 IS 456 / ACI 318 Structural Mechanics** | Column axial tributary service load accumulation ($P_u$), structural safety factors ($FS$), column & beam rebar schedules, design bending moment ($M_u = \frac{w_u L^2}{8}$), and serviceability deflection checks ($L/250$). |
 | **🌍 Geotechnical & Soil Engineering** | 5 regional soil profiles (*Hard Rock*, *Medium Sand*, *Stiff Clay*, *Black Cotton Expansive Soil*, *Soft Marine Clay*), Safe Bearing Capacity (SBC in kPa), footing base contact area, foundation depth, excavation bulk volumetrics ($m^3$), and IS 1893 seismic hazard detailing (Zone II to Zone V). |
@@ -140,12 +145,16 @@ graph TB
         PROM[Prometheus Instrumentator]
     end
 
-    subgraph "Core Engineering Engines"
+    subgraph "Core Engineering & AI Engines"
         LEN[Layout Engine<br/>BSP Floor Plan Synthesis]
         ENG[Engineering Engine<br/>IS 456 Structural & Deflection]
         GEO[Geotech Engine<br/>Soil Mechanics & SBC Analysis]
         VAS[Vastu Engine<br/>9-Zone Mandala Audit]
         ECO[Eco Engine<br/>LEED & Solar Volumetrics]
+        PINN[🔬 PINN Engine<br/>Euler-Bernoulli & Von Mises]
+        EEG[🧠 EEG Engine<br/>Affective VAD Neuro-Arch]
+        MARL[🤖 MARL Engine<br/>QMIX Multi-Agent Negotiation]
+        EVAC[🚪 Evacuation Engine<br/>Weidmann Dynamics & NFPA]
         DXF[CAD Engine<br/>Layered AutoCAD DXF]
         IFC[OpenBIM Engine<br/>ISO 10303-21 IFC4]
     end
@@ -213,6 +222,16 @@ ruff check .
 ---
 
 ## 📋 Comprehensive Changelog
+
+### v2.0.0 — Cognitive AI, Neuro-Architecture & CAD/3D Overhaul (October 2026)
+* 🔬 **PINN Structural Mechanics Engine:** Implemented [`build_matrix/pinn_structural.py`](build_matrix/pinn_structural.py) modeling continuous Euler-Bernoulli deflection, Von Mises yield stress, Fourier positional encodings ($L=6$), and Factor of Safety ($FS$) classification.
+* 🧠 **EEG Affective Neuro-Architecture:** Added [`build_matrix/eeg_affective.py`](build_matrix/eeg_affective.py) computing per-room EEG spectral band powers ($\alpha, \beta, \theta, \gamma$), 3D Valence-Arousal-Dominance (VAD) emotional states, and biophilic architectural recommendations.
+* 🤖 **MARL QMIX Architectural Negotiation:** Added [`build_matrix/marl_architectural.py`](build_matrix/marl_architectural.py) coordinating 4 autonomous engineering agents (*Architect*, *Structural*, *MEP*, *Eco*) with monotonic joint utility factorisation.
+* 🚪 **Weidmann Evacuation & Crowd Safety:** Added [`build_matrix/evacuation_pathfinding.py`](build_matrix/evacuation_pathfinding.py) computing crowd flow velocity curves, 8×8 density heatmaps, bottleneck detection, and NFPA 101 egress compliance.
+* 📐 **2D ISO CAD Blueprints:** Enhanced [`build_matrix/drawing_2d.py`](build_matrix/drawing_2d.py) with wall diagonal hatching, door swing clearance arcs, window mullion centerlines, multi-tier bay dimension chains, title block metadata, and furniture symbols.
+* 🏗️ **3D WebGL Visualization:** Upgraded [`build_matrix/rendering_3d.py`](build_matrix/rendering_3d.py) with color-coded room floor fills, physical glass balcony railings, pitched roof trusses, swimming pool rendering, and warm brick materials.
+* 🎛️ **Streamlit Studio 13-Tab Layout:** Integrated 4 dedicated AI tabs (`🔬 PINN Structural AI`, `🧠 EEG Neuro-Architecture`, `🚪 Evacuation & Crowd Safety`, `🤖 MARL Agent Negotiation`) into [`app.py`](app.py).
+* 🧪 **Zero-Defect Test Suite Expansion:** 92 passing automated tests across 9 test modules with 100% green CI pipeline.
 
 ### v1.2.0 — Enterprise Civil, Geotechnical & BIM Release (October 2026)
 * 🏛️ **OpenBIM IFC4 Generation:** Implemented [`build_matrix/cad_ifc.py`](build_matrix/cad_ifc.py) generating standard ISO-10303-21 STEP files for seamless import into Autodesk Revit and ArchiCAD.
