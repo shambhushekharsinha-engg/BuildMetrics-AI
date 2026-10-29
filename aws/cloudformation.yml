@@ -1,0 +1,181 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'BuildMetrics AI v2.0.0 — Automated AWS CloudFormation Deployment (EC2 + Docker Compose)'
+
+Parameters:
+  InstanceType:
+    Type: String
+    Default: t3.medium
+    AllowedValues:
+      - t3.small
+      - t3.medium
+      - t3.large
+      - t2.medium
+      - m5.large
+    Description: EC2 instance type (t3.medium recommended for ML & WebGL rendering).
+
+  KeyName:
+    Type: String
+    Default: ''
+    Description: (Optional) Name of an existing EC2 KeyPair to enable SSH access. Leave blank if not needed.
+
+  GeminiApiKey:
+    Type: String
+    NoEcho: true
+    Default: ''
+    Description: (Optional) Google Gemini API Key for autonomous architectural prompt parsing.
+
+  LatestUbuntuAmiId:
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: '/aws/service/canonical/ubuntu/server/22.04/stable/current/amd64/hvm/ebs-gp2/ami-id'
+    Description: Automated SSM lookup for latest official Ubuntu 22.04 LTS AMI.
+
+Conditions:
+  HasKeyName: !Not [!Equals [!Ref KeyName, '']]
+
+Resources:
+  BuildMetricsSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for BuildMetrics AI Studio & API
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 8501
+          ToPort: 8501
+          CidrIp: 0.0.0.0/0
+          Description: Streamlit Architectural Studio UI
+        - IpProtocol: tcp
+          FromPort: 8000
+          ToPort: 8000
+          CidrIp: 0.0.0.0/0
+          Description: FastAPI REST API & Swagger Docs
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: Standard HTTP Reverse Proxy
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: Secure HTTPS
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+          Description: SSH Management Access
+
+  BuildMetricsInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceType
+      ImageId: !Ref LatestUbuntuAmiId
+      KeyName: !If [HasKeyName, !Ref KeyName, !Ref 'AWS::NoValue']
+      SecurityGroupIds:
+        - !GetAtt BuildMetricsSecurityGroup.GroupId
+      BlockDeviceMappings:
+        - DeviceName: /dev/sda1
+          Ebs:
+            VolumeSize: 30
+            VolumeType: gp3
+            DeleteOnTermination: true
+      Tags:
+        - Key: Name
+          Value: BuildMetrics-AI-Studio
+        - Key: Application
+          Value: BuildMetrics-AI
+        - Key: Version
+          Value: 2.0.0
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -e
+          exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
+
+          echo "=========================================="
+          echo "Starting BuildMetrics AI Automated Setup"
+          echo "=========================================="
+
+          # 1. System Updates & Docker Prerequisites
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update -y
+          apt-get install -y ca-certificates curl gnupg lsb-release git
+
+          # 2. Install Official Docker Engine & Docker Compose Plugin
+          install -m 0755 -d /etc/apt/keyrings
+          curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+          chmod a+r /etc/apt/keyrings/docker.asc
+
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" > /etc/apt/sources.list.d/docker.list
+          apt-get update -y
+          apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+
+          systemctl enable docker
+          systemctl start docker
+          usermod -aG docker ubuntu
+
+          # 3. Clone Repository
+          cd /home/ubuntu
+          git clone https://github.com/shambhushekharsinha-engg/BuildMetrics-AI.git
+          chown -R ubuntu:ubuntu BuildMetrics-AI
+          cd BuildMetrics-AI
+
+          # 4. Generate Production .env Configuration
+          cat << 'EOF' > .env
+          ENVIRONMENT=production
+          DATABASE_URL=sqlite:///buildmetrics.db
+          REDIS_URL=redis://redis:6379
+          SHARED_EXPORT_DIR=/app/exports
+          ALLOWED_ORIGINS=*
+          API_BASE_URL=http://localhost:8000
+          GEMINI_API_KEY=${GeminiApiKey}
+          EOF
+
+          chown ubuntu:ubuntu .env
+
+          # 5. Launch Full Stack with Docker Compose
+          docker compose up -d --build
+
+          # 6. Configure systemd Service for Automatic Boot Recovery
+          cat << 'EOF' > /etc/systemd/system/buildmetrics.service
+          [Unit]
+          Description=BuildMetrics AI Docker Compose Application
+          Requires=docker.service
+          After=docker.service
+
+          [Service]
+          Type=oneshot
+          RemainAfterExit=yes
+          WorkingDirectory=/home/ubuntu/BuildMetrics-AI
+          ExecStart=/usr/bin/docker compose up -d
+          ExecStop=/usr/bin/docker compose down
+          User=ubuntu
+
+          [Install]
+          WantedBy=multi-user.target
+          EOF
+
+          systemctl daemon-reload
+          systemctl enable buildmetrics.service
+
+          echo "=========================================="
+          echo "BuildMetrics AI Setup Complete!"
+          echo "Streamlit UI accessible on port 8501"
+          echo "FastAPI accessible on port 8000"
+          echo "=========================================="
+
+Outputs:
+  StreamlitStudioURL:
+    Description: 'Public URL for the BuildMetrics AI Streamlit Studio'
+    Value: !Sub 'http://${BuildMetricsInstance.PublicIp}:8501'
+
+  FastApiDocsURL:
+    Description: 'Public URL for the interactive FastAPI Swagger API documentation'
+    Value: !Sub 'http://${BuildMetricsInstance.PublicIp}:8000/docs'
+
+  PublicIP:
+    Description: 'Public IP address of the EC2 instance'
+    Value: !GetAtt BuildMetricsInstance.PublicIp
+
+  InstanceId:
+    Description: 'EC2 Instance ID'
+    Value: !Ref BuildMetricsInstance

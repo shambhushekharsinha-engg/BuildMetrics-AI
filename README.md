@@ -19,7 +19,7 @@
 
 *Transform a single natural-language text prompt into production-ready 2D CAD blueprints, interactive 3D WebGL scenes, OpenBIM IFC models, IS 456 structural schedules, geotechnical foundation designs, Vastu spatial audits, and CSI MasterFormat cost estimates in seconds.*
 
-[Quick Start](#-quick-start) · [Features](#-core-features) · [CAD & BIM](#-cad--openbim-interoperability) · [Architecture](#-system-architecture) · [API Endpoints](#-api-endpoints) · [Testing](#-running-tests)
+[Quick Start](#-quick-start) · [AWS Hosting](AWS_DEPLOYMENT_GUIDE.md) · [Features](#-core-features) · [CAD & BIM](#-cad--openbim-interoperability) · [Architecture](#-system-architecture) · [API Endpoints](#-api-endpoints) · [Testing](#-running-tests)
 
 </div>
 
@@ -127,6 +127,14 @@ streamlit run app.py --server.port 8501
 # Terminal 3 — Celery Background Worker (Optional)
 celery -A worker.celery_app worker --loglevel=info
 ```
+
+### 3. Amazon AWS Cloud Deployment (Production)
+
+Deploy the complete container stack to Amazon AWS using our pre-built CloudFormation template or App Runner config:
+
+* ☁️ **1-Click AWS CloudFormation**: Launch an EC2 stack with security groups, Docker Compose, and automated auto-restart via [`aws/cloudformation.yml`](aws/cloudformation.yml).
+* 🌐 **AWS App Runner (Serverless HTTPS)**: Deploy a zero-maintenance container service via [`aws/apprunner.yaml`](aws/apprunner.yaml).
+* 📜 **Step-by-Step Walkthrough**: Read our complete [**AWS Deployment Guide**](AWS_DEPLOYMENT_GUIDE.md).
 
 ---
 
