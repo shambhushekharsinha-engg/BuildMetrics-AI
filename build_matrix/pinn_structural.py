@@ -27,6 +27,59 @@ class PINNResult:
     deflection_mm: float
     fos: float
     status: str  # "SAFE" | "MARGINAL" | "CRITICAL"
+    section: str = "300x450 mm"
+
+    @property
+    def load_kn(self) -> float:
+        """Alias for load_kN."""
+        return self.load_kN
+
+
+class PINNSummary(dict):
+    """Dictionary subclass providing attribute access for structural summary metrics."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.__dict__ = self
+
+    @property
+    def overall_status(self) -> str:
+        crit = self.get("critical_count", 0)
+        marg = self.get("status_counts", {}).get("MARGINAL", 0)
+        if crit > 0:
+            return "CRITICAL"
+        if marg > 0:
+            return "MARGINAL"
+        return "SAFE"
+
+    @property
+    def safe_count(self) -> int:
+        return self.get("status_counts", {}).get("SAFE", 0)
+
+    @property
+    def marginal_count(self) -> int:
+        return self.get("status_counts", {}).get("MARGINAL", 0)
+
+    @property
+    def critical_count(self) -> int:
+        return self.get("critical_count", 0)
+
+    @property
+    def total_members(self) -> int:
+        sc = self.get("status_counts", {})
+        return sum(sc.values())
+
+    @property
+    def min_fos(self) -> float:
+        return self.get("min_fos", 2.0)
+
+    @property
+    def max_stress_mpa(self) -> float:
+        return self.get("max_stress", 0.0)
+
+    @property
+    def max_deflection_mm(self) -> float:
+        return self.get("max_deflection_mm", 0.0)
 
 
 # ---------------------------------------------------------------------------
@@ -239,11 +292,12 @@ class PINNStructuralEngine:
                 deflection_mm=round(slenderness, 2),  # repurposed field: slenderness ratio
                 fos=round(fos, 4),
                 status=self._classify(fos),
+                section=f"{int(b * 1000)}x{int(b * 1000)} mm",
             ))
 
         return results
 
-    def get_stress_summary(self, building_model: Any) -> dict:
+    def get_stress_summary(self, building_model: Any) -> PINNSummary:
         """
         Return a high-level stress summary for the whole building.
 
@@ -264,25 +318,28 @@ class PINNStructuralEngine:
         all_results = beams + cols
 
         if not all_results:
-            return {
+            return PINNSummary({
                 "max_stress": 0.0,
+                "max_deflection_mm": 0.0,
                 "min_fos": float("inf"),
                 "critical_count": 0,
                 "status_counts": {"SAFE": 0, "MARGINAL": 0, "CRITICAL": 0},
-            }
+            })
 
         max_stress = max(r.stress_mpa for r in all_results)
+        max_defl = max(r.deflection_mm for r in all_results)
         min_fos = min(r.fos for r in all_results)
         status_counts = {"SAFE": 0, "MARGINAL": 0, "CRITICAL": 0}
         for r in all_results:
             status_counts[r.status] += 1
 
-        return {
+        return PINNSummary({
             "max_stress": round(max_stress, 4),
+            "max_deflection_mm": round(max_defl, 2),
             "min_fos": round(min_fos, 4),
             "critical_count": status_counts["CRITICAL"],
             "status_counts": status_counts,
-        }
+        })
 
     @staticmethod
     def fourier_encoding(coords: np.ndarray, F: int = 6) -> np.ndarray:

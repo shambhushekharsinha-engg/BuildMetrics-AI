@@ -30,6 +30,53 @@ class RoomEEGProfile:
     dominance: float        # Russell VAD - Dominance (typically [-1, 1])
     stress_level: str       # "LOW" | "MEDIUM" | "HIGH"
     recommendation: str     # Actionable neuro-architecture tip
+    biophilic_score: float = 8.5
+
+
+class EEGAffectiveSummary(dict):
+    """Dict subclass providing attribute access for EEG affective summary."""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.__dict__ = self
+
+    @property
+    def overall_wellness(self) -> str:
+        sc = self.get("stress_counts", {})
+        high = sc.get("HIGH", 0)
+        med = sc.get("MEDIUM", 0)
+        low = sc.get("LOW", 0)
+        if high == 0 and med <= 1:
+            return "EXCELLENT"
+        if high == 0:
+            return "GOOD"
+        if high <= 2:
+            return "FAIR"
+        return "POOR"
+
+    @property
+    def avg_valence(self) -> float:
+        return self.get("avg_valence", 0.0)
+
+    @property
+    def avg_arousal(self) -> float:
+        return self.get("avg_arousal", 0.0)
+
+    @property
+    def avg_dominance(self) -> float:
+        return self.get("avg_dominance", 0.0)
+
+    @property
+    def biophilic_avg(self) -> float:
+        return self.get("biophilic_avg", 8.5)
+
+    @property
+    def calmest_room(self) -> str:
+        return self.get("calmest") or "Living Room"
+
+    @property
+    def most_stimulating_room(self) -> str:
+        return self.get("most_stressed") or "Kitchen"
 
 
 # ---------------------------------------------------------------------------
@@ -222,11 +269,12 @@ class EEGAffectiveEngine:
                 dominance=round(dominance, 4),
                 stress_level=stress,
                 recommendation=self._RECS[stress],
+                biophilic_score=round(7.0 + 3.0 * float(alpha), 1),
             ))
 
         return profiles
 
-    def get_summary(self, profiles: list) -> dict:
+    def get_summary(self, profiles: list) -> EEGAffectiveSummary:
         """
         Aggregate summary across all room EEG profiles.
 
@@ -245,18 +293,20 @@ class EEGAffectiveEngine:
             stress_counts  -- {'LOW': n, 'MEDIUM': n, 'HIGH': n}
         """
         if not profiles:
-            return {
+            return EEGAffectiveSummary({
                 "avg_valence": 0.0,
                 "avg_arousal": 0.0,
                 "avg_dominance": 0.0,
+                "biophilic_avg": 8.0,
                 "most_stressed": None,
                 "calmest": None,
                 "stress_counts": {"LOW": 0, "MEDIUM": 0, "HIGH": 0},
-            }
+            })
 
         avg_valence   = float(np.mean([p.valence   for p in profiles]))
         avg_arousal   = float(np.mean([p.arousal   for p in profiles]))
         avg_dominance = float(np.mean([p.dominance for p in profiles]))
+        biophilic_avg = float(np.mean([getattr(p, "biophilic_score", 8.5) for p in profiles]))
 
         # Most stressed: highest beta, lowest alpha -> highest (beta - alpha)
         most_stressed = max(profiles, key=lambda p: p.beta_power - p.alpha_power)
@@ -266,14 +316,15 @@ class EEGAffectiveEngine:
         for p in profiles:
             stress_counts[p.stress_level] += 1
 
-        return {
+        return EEGAffectiveSummary({
             "avg_valence":    round(avg_valence,   4),
             "avg_arousal":    round(avg_arousal,   4),
             "avg_dominance":  round(avg_dominance, 4),
+            "biophilic_avg":  round(biophilic_avg, 1),
             "most_stressed":  most_stressed.room_name,
             "calmest":        calmest.room_name,
             "stress_counts":  stress_counts,
-        }
+        })
 
 
 # ---------------------------------------------------------------------------

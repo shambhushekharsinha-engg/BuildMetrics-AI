@@ -39,6 +39,16 @@ class MARLSolution:
     layout_score: float                     # Final weighted layout quality [0, 1]
     _q_trace: list = field(default_factory=list, repr=False)
 
+    @property
+    def q_tot_history(self) -> list:
+        """Alias for _q_trace history."""
+        return self._q_trace
+
+    @property
+    def convergence_epoch(self) -> int:
+        """Alias for iterations."""
+        return self.iterations
+
 
 # ---------------------------------------------------------------------------
 # Engine

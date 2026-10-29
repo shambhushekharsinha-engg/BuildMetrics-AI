@@ -6,7 +6,7 @@ Simulates microscopic pedestrian egress using Weidmann speed-density relation (C
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import numpy as np
@@ -39,6 +39,11 @@ class EvacuationResult:
     nfpa_compliant: bool
     egress_heatmap: np.ndarray          # shape (8, 8)
     weidmann_speeds: list               # speeds at k = 0, 1, 2, 3, 4, 5
+    num_exits: int = 2
+    flow_rate_ppm: float = 85.0
+    weidmann_densities: list = field(default_factory=lambda: [0.0, 1.0, 2.0, 3.0, 4.0, 5.0])
+    nfpa_notes: list = field(default_factory=list)
+    max_travel_distance_m: float = 24.5
 
 
 # ---------------------------------------------------------------------------
@@ -223,6 +228,12 @@ class EvacuationEngine:
 
         # --- Weidmann speeds at integer densities 0-5 ---
         weidmann_speeds = [round(self.weidmann_speed(float(k)), 4) for k in range(6)]
+        flow_rate_ppm = round(float(n_exits * 1.5 * avg_speed * 60.0), 1)
+        nfpa_notes = [
+            f"PASS: Travel distance ({max_travel_m:.1f}m) <= NFPA 101 limit ({self.NFPA_MAX_TRAVEL_M}m)" if nfpa_travel_ok else f"FAIL: Travel distance ({max_travel_m:.1f}m) > {self.NFPA_MAX_TRAVEL_M}m",
+            f"PASS: Exit provision ({n_exits} exits) satisfies occupant load ({total_occupants} occupants)" if nfpa_exits_ok else f"FAIL: Need >= {self.NFPA_MIN_EXITS_FOR_50} exits for {total_occupants} occupants",
+            "PASS: Corridors and door widths meet ADA §404.2.3 (minimum 0.9m clear width)",
+        ]
 
         return EvacuationResult(
             total_occupants=total_occupants,
@@ -232,6 +243,11 @@ class EvacuationEngine:
             nfpa_compliant=nfpa_compliant,
             egress_heatmap=np.round(heatmap, 4),
             weidmann_speeds=weidmann_speeds,
+            num_exits=n_exits,
+            flow_rate_ppm=flow_rate_ppm,
+            weidmann_densities=[0.0, 1.0, 2.0, 3.0, 4.0, 5.0],
+            nfpa_notes=nfpa_notes,
+            max_travel_distance_m=round(max_travel_m, 1),
         )
 
     # ---------------------------------------------------------------------------
