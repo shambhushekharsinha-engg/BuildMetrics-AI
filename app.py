@@ -1656,47 +1656,282 @@ def _generate_spec_sheet_markdown(building: BuildingModel) -> str:
 # TAB 6: Vastu Shastra & Spatial Harmony
 # ---------------------------------------------------------
 with tab_vastu:
-    st.subheader("🧭 Vastu Shastra & Spatial Harmony Orientation Audit")
-    st.caption("9-sector Vastu Purusha Mandala directional alignment, 5 elements balance (Pancha Bhoota), and architectural remedies.")
+    st.subheader("🧭 Vastu Shastra & Spatial Harmony Architectural Studio")
+    st.caption("9-sector Vastu Purusha Mandala directional alignment, 5 elements balance (Pancha Bhoota), bio-climatic solar geometry, and non-destructive architectural remedies.")
 
     vastu_report = VastuEngine.audit_building(building_model)
 
-    v_m1, v_m2, v_m3 = st.columns(3)
+    # 1. Executive Metric Cards Row
+    v_m1, v_m2, v_m3, v_m4 = st.columns(4)
     with v_m1:
-        st.markdown(f'<div class="metric-card"><h4>✨ Spatial Harmony Score</h4><h2>{vastu_report.overall_score}/100</h2><p style="color:#94A3B8; margin:0;">Grade: {vastu_report.grade}</p></div>', unsafe_allow_html=True)
+        st.markdown(
+            f'<div class="metric-card"><h4>✨ Harmony Score</h4><h2>{vastu_report.overall_score}/100</h2>'
+            f'<p style="color:#94A3B8; margin:0;">Grade: {vastu_report.grade}</p></div>',
+            unsafe_allow_html=True
+        )
     with v_m2:
-        st.markdown(f'<div class="metric-card"><h4>🏛️ Brahmasthan (Core)</h4><h2>{"Clear ✅" if "Clear" in vastu_report.brahmasthan_status else "Obstructed ⚠️"}</h2><p style="color:#94A3B8; margin:0;">{vastu_report.brahmasthan_status}</p></div>', unsafe_allow_html=True)
+        is_clear = "Clear" in vastu_report.brahmasthan_status
+        st.markdown(
+            f'<div class="metric-card"><h4>🏛️ Brahmasthan (Core)</h4><h2>{"Clear ✅" if is_clear else "Obstructed ⚠️"}</h2>'
+            f'<p style="color:#94A3B8; margin:0;">{vastu_report.brahmasthan_status.split("(")[0].strip()}</p></div>',
+            unsafe_allow_html=True
+        )
     with v_m3:
-        st.markdown(f'<div class="metric-card"><h4>🕉️ Auspicious Grade</h4><h2>{vastu_report.grade.split()[0]}</h2><p style="color:#94A3B8; margin:0;">{vastu_report.grade}</p></div>', unsafe_allow_html=True)
+        aligned_count = sum(1 for a in vastu_report.room_audits if a.compliance in ("Ideal", "Favorable"))
+        total_rooms_count = max(1, len(vastu_report.room_audits))
+        st.markdown(
+            f'<div class="metric-card"><h4>🎯 Aligned Rooms</h4><h2>{aligned_count}/{total_rooms_count}</h2>'
+            f'<p style="color:#94A3B8; margin:0;">{aligned_count/total_rooms_count:.0%} Auspicious / Favorable</p></div>',
+            unsafe_allow_html=True
+        )
+    with v_m4:
+        ent_dir = vastu_report.entrance_audit.get("direction", "North")
+        ent_score = vastu_report.entrance_audit.get("score", 90)
+        st.markdown(
+            f'<div class="metric-card"><h4>🚪 Main Gateway</h4><h2>{ent_dir}</h2>'
+            f'<p style="color:#94A3B8; margin:0;">Alignment: {ent_score}/100</p></div>',
+            unsafe_allow_html=True
+        )
 
-    st.markdown("### 🌊 Five Elements Balance (Pancha Bhoota)")
+    # 2. Executive Customer Narrative Banner
+    if getattr(vastu_report, "customer_executive_summary", ""):
+        st.info(f"📋 **Client Executive Summary:** {vastu_report.customer_executive_summary}")
+
+    st.markdown("---")
+
+    # 3. Interactive Customer Explainer: The Science of Vastu Shastra
+    with st.expander("📖 The Architectural Science of Vastu Shastra — Customer Explanation Guide", expanded=False):
+        st.markdown("""
+        ### What is Vastu Shastra in Modern Architecture?
+        **Vastu Shastra** is an ancient Indian architectural science codified over 3,000 years ago. Far from mere superstition, 
+        classical Vastu is a sophisticated framework of **bio-climatic architecture, solar-path geometry, and geomagnetic alignment**:
+        """)
+        
+        foundations = getattr(vastu_report, "scientific_foundations", [])
+        if foundations:
+            f_col1, f_col2 = st.columns(2)
+            for i, found in enumerate(foundations):
+                target_col = f_col1 if i % 2 == 0 else f_col2
+                with target_col:
+                    st.markdown(f"#### {found['title']}")
+                    st.caption(f"**{found['subtitle']}**")
+                    st.write(found["explanation"])
+
+        st.markdown("""
+        ---
+        #### 🛡️ The Non-Destructive Remedy Principle (No Walls Demolished)
+        Modern Vastu consulting does **NOT** require breaking walls or altering structural load-bearing frames. 
+        Traditional treatises (*Mayamata*, *Manasara*, *Samarangana Sutradhara*) affirm that directional energy can be **100% harmonized** through:
+        1. **Color Therapy (Chroma Balancing):** Painting walls with the sector's resonant elemental spectrum.
+        2. **Furniture Reorientation:** Aligning bed headboards to South/East and cooktops to East.
+        3. **Elemental Balancing:** Introducing plants (Air/Wood), fountains (Water), warm lighting/metals (Fire), and stone/heavy wood (Earth).
+        4. **Energetic Neutralizers:** Installing metallic transition strips (copper, brass, lead) across thresholds to insulate energy zones.
+        """)
+
+    st.markdown("---")
+
+    # 4. Interactive 9-Sector Vastu Purusha Mandala Visual Canvas
+    st.markdown("### 🗺️ Interactive 9-Sector Vastu Purusha Mandala Map")
+    st.caption("Visual distribution of your building's functional spaces across the 9 cosmic directional zones:")
+
+    # Render 3x3 visual grid (Top: NW, N, NE; Mid: W, Center, E; Bottom: SW, S, SE)
+    row1_keys = ["NW", "N", "NE"]
+    row2_keys = ["W", "Center", "E"]
+    row3_keys = ["SW", "S", "SE"]
+
+    def _render_sector_card(sector_key: str):
+        zone_info = vastu_report.zone_matrix.get(sector_key) if hasattr(vastu_report, "zone_matrix") else None
+        if not zone_info:
+            return
+        
+        occ = ", ".join(zone_info.occupant_rooms) if zone_info.occupant_rooms else "Open / Unallocated"
+        status_color = "#22c55e" if zone_info.sector_score >= 80 else "#f59e0b" if zone_info.sector_score >= 65 else "#ef4444"
+        bg_color = "rgba(15, 23, 42, 0.75)"
+        border_color = status_color
+
+        card_html = f"""
+        <div style="background:{bg_color}; border: 1.5px solid {border_color}; border-radius: 10px; padding: 14px; margin-bottom: 12px; min-height: 175px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                <span style="font-weight:700; color:#38BDF8; font-size:1.05rem;">{zone_info.sector_name}</span>
+                <span style="font-size:0.9rem;">{zone_info.status_icon} <b>{zone_info.sector_score}/100</b></span>
+            </div>
+            <div style="font-size:0.85rem; color:#94A3B8; margin-bottom:4px;">
+                <b>Element:</b> {zone_info.element} | <b>Lord:</b> {zone_info.ruling_deity.split('&')[0].strip()}
+            </div>
+            <div style="font-size:0.85rem; color:#F8FAFC; margin-bottom:6px;">
+                <b>Rooms:</b> <span style="color:#00F0FF; font-weight:600;">{occ}</span>
+            </div>
+            <div style="font-size:0.8rem; color:#A7F3D0; line-height:1.25; background:rgba(255,255,255,0.05); padding:6px; border-radius:6px;">
+                💡 <b>Ideal Uses:</b> {', '.join(zone_info.ideal_uses[:2])}
+            </div>
+        </div>
+        """
+        st.markdown(card_html, unsafe_allow_html=True)
+
+    # Row 1 (North)
+    r1_c1, r1_c2, r1_c3 = st.columns(3)
+    with r1_c1: _render_sector_card("NW")
+    with r1_c2: _render_sector_card("N")
+    with r1_c3: _render_sector_card("NE")
+
+    # Row 2 (Middle)
+    r2_c1, r2_c2, r2_c3 = st.columns(3)
+    with r2_c1: _render_sector_card("W")
+    with r2_c2: _render_sector_card("Center")
+    with r2_c3: _render_sector_card("E")
+
+    # Row 3 (South)
+    r3_c1, r3_c2, r3_c3 = st.columns(3)
+    with r3_c1: _render_sector_card("SW")
+    with r3_c2: _render_sector_card("S")
+    with r3_c3: _render_sector_card("SE")
+
+    st.markdown("---")
+
+    # 5. Pancha Bhoota (Five Elements) Balance
+    st.markdown("### 🌊 Five Elements Balance (Pancha Bhoota Equilibrium)")
+    st.caption("Harmonization of the five fundamental states of matter (Water, Fire, Earth, Air, Space) across your floor plan:")
+    
     e_col1, e_col2, e_col3, e_col4, e_col5 = st.columns(5)
     el_keys = list(vastu_report.element_scores.keys())
+    el_tips = {
+        "Water (Jal)": "Maintain North-East lightweight and introduce water features or light blues.",
+        "Fire (Agni)": "Anchor cooking and electronics in South-East; avoid blue or water clashes.",
+        "Earth (Prithvi)": "Keep South-West heavy with solid furnishings and warm terracotta hues.",
+        "Air (Vayu)": "Ensure continuous dynamic ventilation and light grey/white palettes in North-West.",
+        "Space (Akash)": "Preserve Brahmasthan center open, unencumbered, and illuminated with overhead light.",
+    }
     for col, el in zip([e_col1, e_col2, e_col3, e_col4, e_col5], el_keys):
         score = vastu_report.element_scores[el]
         with col:
-            st.metric(el.split()[0], f"{score}%", el.split()[1] if len(el.split()) > 1 else "")
+            el_clean = el.split()[0]
+            st.metric(el_clean, f"{score}%", "Balanced 🟢" if score >= 75 else "Harmonized 🟡")
             st.progress(score / 100.0)
+            st.caption(el_tips.get(el, "Balanced directional element flow."))
 
-    st.divider()
-    st.markdown("### 📐 Directional Room Allocation Matrix")
+    st.markdown("---")
+
+    # 6. Dosha (Imbalance) & Remedy Action Center
+    doshas = getattr(vastu_report, "doshas_identified", [])
+    if doshas:
+        st.markdown("### 🚨 Identified Spatial Doshas & Non-Destructive Cures")
+        st.caption("Targeted interior and elemental corrections that neutralize directional imbalances without structural demolition:")
+        for d in doshas:
+            sev = d.get("severity", "Moderate")
+            sev_badge = "🚨 CRITICAL" if sev == "Critical" else "⚠️ SEVERE" if sev == "Severe" else "🟡 MODERATE"
+            with st.expander(f"{sev_badge} — {d.get('room', 'Space')} in {d.get('zone', 'Sector')}: {d.get('dosha', '')}", expanded=True):
+                st.markdown(f"**Defect Identified:** {d.get('dosha', '')}")
+                st.markdown(f"**🛠️ Step-by-Step Non-Destructive Remedy:** {d.get('remedy', '')}")
+    else:
+        st.success("🎉 **Exceptional Spatial Alignment:** No critical or severe Vastu doshas detected across this layout!")
+
+    st.markdown("---")
+
+    # 7. Detailed Directional Room Allocation Matrix
+    st.markdown("### 📐 Room-by-Room Directional Audit & Scientific Rationale")
+    
     room_audit_data = [
         {
-            "Room ID": a.room_id,
             "Room Name": a.room_name,
             "Allocated Sector": a.zone,
             "Ideal Vastu Sectors": ", ".join(a.ideal_zones[:2]),
             "Compliance": f"{'✅ ' if a.compliance in ('Ideal', 'Favorable') else '⚠️ '}{a.compliance}",
             "Score": f"{a.score}/100",
-            "Architectural Remedy": a.remedy,
+            "Pancha Bhoota": a.element,
+            "Color Palette": getattr(a, "recommended_colors", "Pastel tones"),
+            "Primary Remedy / Action": a.remedy,
         }
         for a in vastu_report.room_audits
     ]
     st.dataframe(room_audit_data, use_container_width=True)
 
-    st.markdown("### 🌿 Key Vastu Harmonization Recommendations")
-    for rec in vastu_report.key_recommendations:
-        st.info(rec)
+    # 8. Room-by-Room Interior Layout Cards
+    with st.expander("🛋️ Detailed Room Interior Layout & Furniture Guidelines", expanded=False):
+        for audit in vastu_report.room_audits:
+            st.markdown(f"#### 🚪 {audit.room_name} ({audit.zone}) — Compliance: **{audit.compliance}** ({audit.score}/100)")
+            st.write(f"🔬 **Bio-Climatic Rationale:** {getattr(audit, 'scientific_rationale', 'Optimized solar and cross-ventilation alignment.')}")
+            
+            tips = getattr(audit, "interior_tips", [])
+            if tips:
+                st.markdown("**🛋️ Practical Layout & Furniture Tips:**")
+                for tip in tips:
+                    st.write(f"- {tip}")
+            
+            remedy_kit = getattr(audit, "remedy_kit", None)
+            if remedy_kit:
+                rk_col1, rk_col2 = st.columns(2)
+                with rk_col1:
+                    st.info(f"🎨 **Color Therapy:** {remedy_kit.color_therapy}")
+                    st.write(f"🛋️ **Furniture Placement:** {remedy_kit.furniture_remedy}")
+                with rk_col2:
+                    st.warning(f"🌿 **Elemental Cure:** {remedy_kit.elemental_cure}")
+                    st.write(f"⚡ **Energy Neutralizer:** {remedy_kit.energy_neutralizer}")
+            st.divider()
+
+    st.markdown("---")
+
+    # 9. Key Recommendations & Actionable Checklist
+    col_rec1, col_rec2 = st.columns(2)
+    with col_rec1:
+        st.markdown("### 🌿 Key Vastu Harmonization Recommendations")
+        for rec in vastu_report.key_recommendations:
+            st.info(rec)
+
+    with col_rec2:
+        st.markdown("### ✅ Actionable 10-Point Homeowner Checklist")
+        checklist = getattr(vastu_report, "actionable_checklist", [])
+        for item in checklist[:6]:
+            st.write(f"{item}")
+
+    st.markdown("---")
+
+    # 10. Printable / Downloadable Vastu Consultation Report
+    st.markdown("### 📑 Export Vastu Shastra Consultation Report")
+    st.caption("Generate a clean, professional Markdown report to share with clients, architects, and contractors:")
+    
+    report_md_lines = [
+        f"# VASTU SHASTRA & SPATIAL HARMONY AUDIT REPORT",
+        f"**Project:** BuildMetrics AI Architectural Blueprint",
+        f"**Date:** Generated Automatically | **Spatial Harmony Score:** {vastu_report.overall_score}/100 ({vastu_report.grade})",
+        f"**Brahmasthan Status:** {vastu_report.brahmasthan_status}",
+        f"**Main Entrance Gateway:** {vastu_report.entrance_audit.get('direction', 'North')} ({vastu_report.entrance_audit.get('pad_name', 'Standard')})",
+        "",
+        "## Executive Summary",
+        getattr(vastu_report, "customer_executive_summary", ""),
+        "",
+        "## Five Elements (Pancha Bhoota) Balance",
+    ]
+    for el, sc in vastu_report.element_scores.items():
+        report_md_lines.append(f"- **{el}:** {sc}%")
+    
+    report_md_lines.extend([
+        "",
+        "## Room Allocations & Compliance",
+    ])
+    for r in vastu_report.room_audits:
+        report_md_lines.append(f"### {r.room_name} ({r.zone})")
+        report_md_lines.append(f"- **Compliance:** {r.compliance} ({r.score}/100)")
+        report_md_lines.append(f"- **Ideal Sectors:** {', '.join(r.ideal_zones[:2])}")
+        report_md_lines.append(f"- **Scientific Rationale:** {getattr(r, 'scientific_rationale', '')}")
+        report_md_lines.append(f"- **Recommended Colors:** {getattr(r, 'recommended_colors', '')}")
+        report_md_lines.append(f"- **Actionable Remedy:** {r.remedy}")
+        report_md_lines.append("")
+
+    report_md_lines.extend([
+        "## Actionable Homeowner Checklist",
+    ])
+    for cl in getattr(vastu_report, "actionable_checklist", []):
+        report_md_lines.append(f"- {cl}")
+
+    report_md_text = "\n".join(report_md_lines)
+
+    st.download_button(
+        label="📥 Download Vastu Consultation Report (.md)",
+        data=report_md_text,
+        file_name="BuildMetrics_Vastu_Consultation_Report.md",
+        mime="text/markdown",
+        use_container_width=True,
+    )
 
 with tab_eco:
     st.subheader("🌱 Eco & Sustainability Analysis")

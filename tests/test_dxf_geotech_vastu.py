@@ -128,6 +128,40 @@ class TestVastuShastraEngine:
             assert ra.compliance in ("Ideal", "Favorable", "Neutral", "Non-Compliant")
             assert ra.remedy != ""
 
+    def test_enhanced_vastu_mandala_and_explanations(self, sample_building):
+        report = VastuEngine.audit_building(sample_building)
+        # 9-zone matrix
+        assert len(report.zone_matrix) == 9
+        for key in ("NE", "N", "NW", "E", "Center", "W", "SE", "S", "SW"):
+            assert key in report.zone_matrix
+            zone = report.zone_matrix[key]
+            assert zone.sector_name != ""
+            assert zone.element != ""
+            assert zone.bio_climatic_role != ""
+            assert len(zone.ideal_uses) > 0
+            assert len(zone.forbidden_uses) > 0
+
+        # Scientific foundations & customer explanation
+        assert len(report.scientific_foundations) >= 4
+        for foundation in report.scientific_foundations:
+            assert "title" in foundation
+            assert "explanation" in foundation
+
+        # Actionable checklist
+        assert len(report.actionable_checklist) >= 5
+
+        # Executive summary
+        assert report.customer_executive_summary != ""
+        assert str(report.overall_score) in report.customer_executive_summary
+
+        # Room remedy kit & interior tips
+        for ra in report.room_audits:
+            assert ra.scientific_rationale != ""
+            assert ra.remedy_kit is not None
+            assert ra.remedy_kit.furniture_remedy != ""
+            assert ra.remedy_kit.color_therapy != ""
+            assert len(ra.interior_tips) > 0
+
 
 class TestStructuralLoadDistribution:
     def test_load_distribution_metrics(self, sample_building):
