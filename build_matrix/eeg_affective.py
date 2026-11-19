@@ -45,7 +45,6 @@ class EEGAffectiveSummary(dict):
         sc = self.get("stress_counts", {})
         high = sc.get("HIGH", 0)
         med = sc.get("MEDIUM", 0)
-        low = sc.get("LOW", 0)
         if high == 0 and med <= 1:
             return "EXCELLENT"
         if high == 0:

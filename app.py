@@ -1890,8 +1890,8 @@ with tab_vastu:
     st.caption("Generate a clean, professional Markdown report to share with clients, architects, and contractors:")
     
     report_md_lines = [
-        f"# VASTU SHASTRA & SPATIAL HARMONY AUDIT REPORT",
-        f"**Project:** BuildMetrics AI Architectural Blueprint",
+        "# VASTU SHASTRA & SPATIAL HARMONY AUDIT REPORT",
+        "**Project:** BuildMetrics AI Architectural Blueprint",
         f"**Date:** Generated Automatically | **Spatial Harmony Score:** {vastu_report.overall_score}/100 ({vastu_report.grade})",
         f"**Brahmasthan Status:** {vastu_report.brahmasthan_status}",
         f"**Main Entrance Gateway:** {vastu_report.entrance_audit.get('direction', 'North')} ({vastu_report.entrance_audit.get('pad_name', 'Standard')})",
