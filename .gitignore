@@ -22,5 +22,6 @@ BuildMetrics_AI_Research_Paper_Final_v2.docx
 # Temp test & debug logs
 *.png
 ec2_log.json
+scratch/
 
 

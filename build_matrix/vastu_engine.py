@@ -76,6 +76,18 @@ class VastuReport:
     actionable_checklist: list[str] = field(default_factory=list)
     entrance_audit: dict[str, Any] = field(default_factory=dict)
 
+    @property
+    def recommendations(self) -> list[str]:
+        return self.key_recommendations
+
+    @property
+    def rating(self) -> str:
+        return self.grade
+
+    @property
+    def simha_dwara_status(self) -> dict[str, Any]:
+        return self.entrance_audit
+
 
 class VastuEngine:
     """
@@ -852,3 +864,7 @@ class VastuEngine:
                 ),
             },
         ]
+
+    # Backward compatibility alias
+    evaluate_layout = audit_building
+

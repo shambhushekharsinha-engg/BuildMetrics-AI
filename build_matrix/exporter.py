@@ -68,6 +68,17 @@ class ExporterEngine:
         return filepath
 
     @classmethod
+    def export_pdf(cls, building: BuildingModel, floor: int = 1, config: Blueprint2DConfig | None = None) -> bytes:
+        """Exports 2D Blueprint directly to PDF binary bytes."""
+        import io
+        renderer = Blueprint2DRenderer(config=config)
+        fig = renderer.render(building, floor=floor)
+        buf = io.BytesIO()
+        fig.savefig(buf, format="pdf", bbox_inches="tight")
+        plt.close(fig)
+        return buf.getvalue()
+
+    @classmethod
     def export_3d_obj(cls, building: BuildingModel, filepath: str) -> str:
         """Exports 3D building mesh to OBJ geometry file."""
         renderer = Blueprint3DRenderer(building)
